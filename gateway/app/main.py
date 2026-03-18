@@ -116,6 +116,81 @@ def custom_openapi():
         },
         "required": ["error"],
     }
+    error_schema_ref = {"$ref": "#/components/schemas/ErrorResponse"}
+    for path, path_item in openapi_schema.get("paths", {}).items():
+        for method, operation in path_item.items():
+            if method.lower() not in {"get", "post", "put", "patch", "delete", "options", "head"}:
+                continue
+            responses = operation.setdefault("responses", {})
+            responses["400"] = {
+                "description": (
+                    "Bad Request. The request is invalid (missing fields, invalid types, out-of-range values, "
+                    "invalid JSON, or invalid envelope). Clients should inspect error.code and error.details."
+                ),
+                "content": {
+                    "application/json": {
+                        "schema": error_schema_ref,
+                        "examples": {
+                            "request_validation_failed": {
+                                "summary": "Request validation failed",
+                                "value": {
+                                    "error": {
+                                        "code": "request_validation_failed",
+                                        "message": "The request is invalid",
+                                        "details": {
+                                            "fields": [
+                                                {
+                                                    "field": "body.command_type",
+                                                    "message": "Field required",
+                                                }
+                                            ]
+                                        },
+                                        "timestamp": "2026-03-18T00:00:00Z",
+                                        "path": path,
+                                    }
+                                },
+                            },
+                            "invalid_json": {
+                                "summary": "Invalid JSON body",
+                                "value": {
+                                    "error": {
+                                        "code": "invalid_json",
+                                        "message": "Request body is not valid JSON",
+                                        "details": {},
+                                        "timestamp": "2026-03-18T00:00:00Z",
+                                        "path": path,
+                                    }
+                                },
+                            },
+                        },
+                    }
+                },
+            }
+            responses["404"] = {
+                "description": (
+                    "Not Found. The requested resource does not exist (for example, a node_id was not found). "
+                    "Clients should handle this as a missing resource and may retry only if appropriate."
+                ),
+                "content": {
+                    "application/json": {
+                        "schema": error_schema_ref,
+                        "examples": {
+                            "node_not_found": {
+                                "summary": "Node not found",
+                                "value": {
+                                    "error": {
+                                        "code": "node_not_found",
+                                        "message": "node_id not found",
+                                        "details": {"node_id": "missing-node-01"},
+                                        "timestamp": "2026-03-18T00:00:00Z",
+                                        "path": path,
+                                    }
+                                },
+                            }
+                        },
+                    }
+                },
+            }
     app.openapi_schema = openapi_schema
     return app.openapi_schema
 

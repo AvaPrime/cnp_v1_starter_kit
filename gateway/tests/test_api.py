@@ -236,3 +236,14 @@ def test_openapi_has_no_legacy_validation(client: TestClient | None = None):
     assert "HTTPValidationError" not in schemas
     assert "ValidationError" not in schemas
     assert "ErrorResponse" in schemas
+    paths = data.get("paths", {})
+    for path, path_item in paths.items():
+        for method, operation in path_item.items():
+            if method.lower() not in {"get", "post", "put", "patch", "delete", "options", "head"}:
+                continue
+            responses = operation.get("responses", {})
+            assert "400" in responses
+            assert "404" in responses
+            for status in ("400", "404"):
+                content = responses[status].get("content", {}).get("application/json", {})
+                assert content.get("schema", {}).get("$ref") == "#/components/schemas/ErrorResponse"

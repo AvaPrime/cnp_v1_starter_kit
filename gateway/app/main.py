@@ -5,10 +5,13 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from .api.routes import router
+from .api.compat import router as compat_router
+from .api.admin import router as admin_router
 from .core.config import settings
 from .core.db import init_db
 from .core.mqtt_client import GatewayMqttBridge
 from .core.registry import mark_offline_nodes
+from .core.rate_limit import RateLimitMiddleware
 
 bridge = GatewayMqttBridge(settings.gateway_db_path)
 
@@ -31,5 +34,8 @@ async def lifespan(app: FastAPI):
         await bridge.stop()
 
 
-app = FastAPI(title="CNP v1 Gateway", version="0.1.0", lifespan=lifespan)
+app = FastAPI(title="CNP v1 Gateway", version="0.2.0", lifespan=lifespan)
+app.add_middleware(RateLimitMiddleware)
 app.include_router(router, prefix="/api")
+app.include_router(compat_router, prefix="/v1/compat")
+app.include_router(admin_router, prefix="/api")

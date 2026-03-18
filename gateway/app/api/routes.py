@@ -1,15 +1,22 @@
 from __future__ import annotations
+import json
+import logging
 from datetime import datetime, timezone
+from typing import Any
 from uuid import uuid4
 
 import aiosqlite
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
+from fastapi.responses import JSONResponse
+from pydantic import ValidationError
 
 from ..core.config import settings
-from ..core.storage import create_command
-from ..models.schemas import CommandRequest
+from ..core.rate_limit import check_node_rate
+from ..core.storage import create_command, insert_ack, insert_error, insert_event, upsert_command_result
+from ..models.schemas import CommandRequest, Envelope, NodeResponse, validate_bootstrap_token
 
 router = APIRouter()
+log = logging.getLogger("cnp.routes")
 
 
 def get_bridge():
@@ -17,33 +24,94 @@ def get_bridge():
     return bridge
 
 
+def _now_utc() -> str:
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def require_node_token(x_cnp_node_token: str | None = Header(default=None)) -> str:
+    if not validate_bootstrap_token(x_cnp_node_token):
+        raise HTTPException(
+            status_code=401,
+            detail={"error": "unauthorized", "hint": "Set X-CNP-Node-Token header"},
+        )
+    return x_cnp_node_token  # type: ignore[return-value]
+
+
+async def _parse_envelope(request: Request) -> tuple[Envelope, dict[str, Any]]:
+    try:
+        raw = await request.json()
+    except Exception:
+        raise HTTPException(status_code=422, detail="Request body is not valid JSON")
+    try:
+        envelope = Envelope.model_validate(raw)
+    except ValidationError as exc:
+        errors = exc.errors()
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "error": "envelope_validation_failed",
+                "fields": [
+                    {"field": ".".join(str(p) for p in e["loc"]), "message": e["msg"]}
+                    for e in errors
+                ],
+            },
+        )
+    return envelope, raw
+
+
 @router.get("/health")
-async def health():
-    return {"status": "ok"}
+async def health() -> dict[str, Any]:
+    db_ok = False
+    try:
+        async with aiosqlite.connect(settings.gateway_db_path) as db:
+            await db.execute("SELECT 1")
+            db_ok = True
+    except Exception:
+        pass
+    return {
+        "status": "ok",
+        "version": "0.2.0",
+        "db_ok": db_ok,
+        "ts_utc": _now_utc(),
+    }
 
 
 @router.get("/nodes")
-async def list_nodes():
+async def list_nodes(
+    status: str | None = Query(default=None),
+    limit: int = Query(default=100, le=500),
+) -> list[dict[str, Any]]:
+    clause = "WHERE status = ?" if status else ""
+    params = [status, limit] if status else [limit]
     async with aiosqlite.connect(settings.gateway_db_path) as db:
         db.row_factory = aiosqlite.Row
-        async with db.execute("SELECT * FROM nodes ORDER BY node_id") as cur:
+        async with db.execute(
+            f"SELECT * FROM nodes {clause} ORDER BY node_id LIMIT ?",
+            params,
+        ) as cur:
             rows = [dict(r) for r in await cur.fetchall()]
-    return rows
+    return [NodeResponse.from_row(r).model_dump() for r in rows]
 
 
 @router.get("/nodes/{node_id}")
-async def get_node(node_id: str):
+async def get_node(node_id: str) -> dict[str, Any]:
     async with aiosqlite.connect(settings.gateway_db_path) as db:
         db.row_factory = aiosqlite.Row
-        async with db.execute("SELECT * FROM nodes WHERE node_id=?", (node_id,)) as cur:
+        async with db.execute(
+            "SELECT * FROM nodes WHERE node_id=?", (node_id,)
+        ) as cur:
             row = await cur.fetchone()
     if not row:
         raise HTTPException(status_code=404, detail="Node not found")
-    return dict(row)
+    return NodeResponse.from_row(dict(row)).model_dump()
 
 
 @router.post("/nodes/{node_id}/commands")
-async def send_command(node_id: str, command: CommandRequest, bridge=Depends(get_bridge)):
+async def send_command(
+    node_id: str,
+    command: CommandRequest,
+    bridge=Depends(get_bridge),
+) -> dict[str, Any]:
     command_id = str(uuid4())
     payload = {
         "command_id": command_id,
@@ -52,9 +120,236 @@ async def send_command(node_id: str, command: CommandRequest, bridge=Depends(get
         "timeout_ms": command.timeout_ms,
         "arguments": command.arguments,
         "issued_by": command.issued_by,
-        "issued_ts_utc": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+        "issued_ts_utc": _now_utc(),
         "dry_run": command.dry_run,
     }
     await create_command(settings.gateway_db_path, payload, node_id)
     await bridge.publish_command(node_id, payload)
     return {"command_id": command_id, "status": "queued"}
+
+
+@router.patch("/nodes/{node_id}/config")
+async def update_node_config(
+    node_id: str, request: Request
+) -> dict[str, Any]:
+    body = await request.json()
+    async with aiosqlite.connect(settings.gateway_db_path) as db:
+        await db.execute(
+            """
+            INSERT INTO node_config
+                (node_id, heartbeat_interval_sec, report_interval_sec, updated_at)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT(node_id) DO UPDATE SET
+                heartbeat_interval_sec = excluded.heartbeat_interval_sec,
+                report_interval_sec    = excluded.report_interval_sec,
+                updated_at             = excluded.updated_at
+            """,
+            (
+                node_id,
+                body.get("heartbeat_interval_sec", 60),
+                body.get("report_interval_sec", 60),
+                _now_utc(),
+            ),
+        )
+        await db.commit()
+    return {"status": "ok"}
+
+
+@router.get("/events")
+async def list_events(
+    limit: int = Query(default=50, le=500),
+    priority: str | None = Query(default=None),
+) -> list[dict[str, Any]]:
+    clause = "WHERE priority=?" if priority else ""
+    params = ([priority, limit] if priority else [limit])
+    async with aiosqlite.connect(settings.gateway_db_path) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute(
+            f"SELECT * FROM events {clause} ORDER BY ts_utc DESC LIMIT ?",
+            params,
+        ) as cur:
+            return [dict(r) for r in await cur.fetchall()]
+
+
+@router.get("/alerts")
+async def list_alerts() -> list[dict[str, Any]]:
+    async with aiosqlite.connect(settings.gateway_db_path) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute(
+            "SELECT * FROM events WHERE priority IN ('high','critical') "
+            "AND ts_utc >= datetime('now', '-24 hours') "
+            "ORDER BY ts_utc DESC LIMIT 100"
+        ) as cur:
+            return [dict(r) for r in await cur.fetchall()]
+
+
+@router.get("/summary")
+async def fleet_summary() -> dict[str, Any]:
+    async with aiosqlite.connect(settings.gateway_db_path) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute("SELECT COUNT(*) FROM nodes WHERE status != 'retired'") as cur:
+            (total_nodes,) = await cur.fetchone()
+        async with db.execute("SELECT COUNT(*) FROM nodes WHERE status = 'online'") as cur:
+            (online_count,) = await cur.fetchone()
+        async with db.execute("SELECT COUNT(*) FROM nodes WHERE status = 'offline'") as cur:
+            (offline_count,) = await cur.fetchone()
+        async with db.execute(
+            "SELECT COUNT(*) FROM events WHERE priority IN ('high','critical') "
+            "AND ts_utc >= datetime('now', '-24 hours')"
+        ) as cur:
+            (alerts_24h,) = await cur.fetchone()
+        async with db.execute(
+            "SELECT COUNT(*) FROM errors WHERE ts_utc >= datetime('now', '-24 hours')"
+        ) as cur:
+            (errors_24h,) = await cur.fetchone()
+        async with db.execute(
+            "SELECT COUNT(*) FROM commands WHERE status IN ('pending','queued')"
+        ) as cur:
+            (pending_commands,) = await cur.fetchone()
+    return {
+        "total_nodes": total_nodes,
+        "online_count": online_count,
+        "offline_count": offline_count,
+        "alerts_24h": alerts_24h,
+        "errors_24h": errors_24h,
+        "pending_commands": pending_commands,
+    }
+
+
+@router.post("/node/hello")
+async def node_hello(
+    request: Request,
+    _token: str = Depends(require_node_token),
+) -> dict[str, Any]:
+    envelope, raw = await _parse_envelope(request)
+    node_id = envelope.node_id
+    allowed, retry = check_node_rate(node_id)
+    if not allowed:
+        raise HTTPException(
+            status_code=429,
+            detail={"error": "too_many_requests"},
+            headers={"Retry-After": str(retry)},
+        )
+    from ..core.registry import upsert_node
+    await upsert_node(settings.gateway_db_path, envelope.model_dump())
+    async with aiosqlite.connect(settings.gateway_db_path) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute(
+            "SELECT * FROM node_config WHERE node_id=?", (node_id,)
+        ) as cur:
+            cfg = await cur.fetchone()
+        if not cfg:
+            await db.execute(
+                "INSERT OR IGNORE INTO node_config (node_id) VALUES (?)", (node_id,)
+            )
+            await db.commit()
+            async with db.execute(
+                "SELECT * FROM node_config WHERE node_id=?", (node_id,)
+            ) as cur:
+                cfg = await cur.fetchone()
+    return {
+        "protocol_version": "CNPv1",
+        "message_type": "register_ack",
+        "registered": True,
+        "config": {
+            "heartbeat_interval_sec": cfg["heartbeat_interval_sec"] if cfg else 60,
+            "report_interval_sec": cfg["report_interval_sec"] if cfg else 60,
+            "offline_after_sec": settings.offline_after_seconds,
+            "permissions": ["control", "configuration", "maintenance"],
+        },
+    }
+
+
+@router.post("/node/heartbeat")
+async def node_heartbeat(
+    request: Request,
+    _token: str = Depends(require_node_token),
+) -> dict[str, Any]:
+    envelope, _ = await _parse_envelope(request)
+    from ..core.registry import update_heartbeat
+    await update_heartbeat(settings.gateway_db_path, envelope.model_dump())
+    return {"status": "ok"}
+
+
+@router.post("/node/event")
+async def node_event(
+    request: Request,
+    _token: str = Depends(require_node_token),
+) -> dict[str, Any]:
+    envelope, _ = await _parse_envelope(request)
+    await insert_event(settings.gateway_db_path, envelope.model_dump())
+    return {"status": "ok", "message_id": envelope.message_id}
+
+
+@router.post("/node/state")
+async def node_state(
+    request: Request,
+    _token: str = Depends(require_node_token),
+) -> dict[str, Any]:
+    envelope, _ = await _parse_envelope(request)
+    async with aiosqlite.connect(settings.gateway_db_path) as db:
+        p = envelope.payload
+        await db.execute(
+            "UPDATE nodes SET status=?, last_seen_utc=? WHERE node_id=?",
+            (p.get("status", "online"), _now_utc(), envelope.node_id),
+        )
+        await db.commit()
+    return {"status": "ok"}
+
+
+@router.post("/node/error")
+async def node_error(
+    request: Request,
+    _token: str = Depends(require_node_token),
+) -> dict[str, Any]:
+    envelope, _ = await _parse_envelope(request)
+    await insert_error(settings.gateway_db_path, envelope.model_dump())
+    return {"status": "ok"}
+
+
+@router.post("/node/command_result")
+async def node_command_result(
+    request: Request,
+    _token: str = Depends(require_node_token),
+) -> dict[str, Any]:
+    envelope, _ = await _parse_envelope(request)
+    await upsert_command_result(settings.gateway_db_path, envelope.model_dump())
+    return {"status": "ok"}
+
+
+@router.get("/node/commands/{node_id}")
+async def get_pending_command(
+    node_id: str,
+    _token: str = Depends(require_node_token),
+) -> dict[str, Any]:
+    async with aiosqlite.connect(settings.gateway_db_path) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute(
+            """SELECT * FROM commands
+               WHERE node_id=? AND status='queued'
+               ORDER BY issued_ts_utc ASC LIMIT 1""",
+            (node_id,),
+        ) as cur:
+            cmd = await cur.fetchone()
+        if not cmd:
+            return {"command": None}
+        cmd = dict(cmd)
+        await db.execute(
+            "UPDATE commands SET status='pending' WHERE command_id=?",
+            (cmd["command_id"],),
+        )
+        await db.commit()
+    return {
+        "protocol_version": "CNPv1",
+        "message_type": "command",
+        "node_id": node_id,
+        "ts_utc": _now_utc(),
+        "payload": {
+            "command_id": cmd["command_id"],
+            "command_type": cmd["command_type"],
+            "category": cmd["category"],
+            "arguments": json.loads(cmd.get("arguments_json") or "{}"),
+            "timeout_ms": cmd.get("timeout_ms", 15000),
+        },
+        "command": True,
+    }

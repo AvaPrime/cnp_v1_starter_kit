@@ -23,6 +23,11 @@ from httpx import AsyncClient, ASGITransport
 os.environ.setdefault("BOOTSTRAP_TOKEN", "test-bootstrap-token-001")
 os.environ.setdefault("GATEWAY_DB_PATH", ":memory:")
 
+# Ensure Python can import the 'app' package from gateway/
+import sys
+from pathlib import Path
+sys.path.insert(0, str((Path(__file__).parent / "gateway").resolve()))
+
 from app.core.db import init_db
 from app.models.schemas import BOOTSTRAP_TOKEN
 

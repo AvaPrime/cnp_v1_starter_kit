@@ -1,0 +1,128 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "cnp-gateway"
+version = "0.2.0"
+description = "Codessa Node Protocol v1 — IoT Gateway"
+readme = "README.md"
+license = { file = "../LICENSE" }
+requires-python = ">=3.11"
+authors = [
+    { name = "Ava Prime / Codessa OS" }
+]
+keywords = ["iot", "mqtt", "esp32", "fastapi", "cnp", "gateway"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Framework :: FastAPI",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: System :: Networking",
+    "Topic :: Internet of Things",
+]
+
+# ── Runtime dependencies ───────────────────────────────────────────────────────
+dependencies = [
+    "fastapi==0.116.1",
+    "uvicorn[standard]==0.35.0",
+    "pydantic==2.11.7",
+    "aiosqlite==0.21.0",
+    "asyncio-mqtt==0.16.2",   # Phase 3: migrate to aiomqtt>=2.0.0
+    "orjson==3.11.1",
+    "httpx==0.28.1",
+]
+
+# ── Optional dependency groups ─────────────────────────────────────────────────
+[project.optional-dependencies]
+
+# Development + testing
+dev = [
+    "pytest==8.4.1",
+    "pytest-asyncio>=0.23,<1.0",
+    "pytest-cov>=4.1.0",
+    "httpx>=0.28.1",
+]
+
+# Code quality (also used in CI)
+lint = [
+    "ruff>=0.4.0",
+    "mypy>=1.10.0",
+]
+
+# Security scanning (also used in CI)
+security = [
+    "bandit>=1.7.0",
+    "pip-audit>=2.7.0",
+]
+
+# All dev tooling at once
+all-dev = [
+    "cnp-gateway[dev,lint,security]",
+]
+
+# ── Entry points ───────────────────────────────────────────────────────────────
+[project.scripts]
+cnp-gateway = "app.main:app"
+
+# ── Tool configuration ─────────────────────────────────────────────────────────
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = [
+    "--cov=app",
+    "--cov-report=term-missing",
+    "--cov-report=xml:coverage.xml",
+    "--cov-fail-under=60",
+    "-v",
+    "--tb=short",
+]
+filterwarnings = [
+    "error",
+    "ignore::DeprecationWarning:asyncio_mqtt",
+    "ignore::pytest.PytestUnraisableExceptionWarning",
+]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+src = ["app", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "C4"]
+ignore = [
+    "E501",  # line too long — handled by formatter
+    "B008",  # function calls in default arguments (FastAPI Depends pattern)
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S101"]  # assert allowed in tests
+
+[tool.mypy]
+python_version = "3.11"
+ignore_missing_imports = true
+no_strict_optional = true
+warn_unused_ignores = true
+warn_return_any = false
+
+[tool.coverage.run]
+source = ["app"]
+omit = ["tests/*", "*/conftest.py"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["app"]

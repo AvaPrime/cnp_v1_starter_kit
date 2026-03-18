@@ -1,0 +1,105 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# CNP v1 — Docker Compose
+#
+# Services:
+#   gateway    FastAPI gateway (this repo)
+#   mosquitto  Eclipse Mosquitto MQTT broker (edge transport)
+#
+# Quick start:
+#   cp .env.example .env
+#   # Edit .env: set BOOTSTRAP_TOKEN and ADMIN_TOKEN to real secrets
+#   docker compose up
+#
+# Gateway API: http://localhost:8080
+# MQTT broker:  localhost:1883 (TCP) / localhost:9001 (WebSocket)
+#
+# Production notes:
+#   - Mount a named volume for /data (SQLite persistence)
+#   - Replace the Mosquitto password file with your own credentials
+#   - Add a reverse proxy (Caddy/nginx) in front of the gateway for TLS
+#   - See TLS_SETUP.md for MQTT TLS configuration
+# ─────────────────────────────────────────────────────────────────────────────
+
+services:
+  # ── MQTT Broker ─────────────────────────────────────────────────────────────
+  mosquitto:
+    image: eclipse-mosquitto:2.0
+    container_name: cnp-mosquitto
+    restart: unless-stopped
+    ports:
+      - "1883:1883"     # MQTT TCP
+      - "9001:9001"     # MQTT WebSocket (for browser clients)
+    volumes:
+      - ./examples/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - mosquitto-data:/mosquitto/data
+      - mosquitto-log:/mosquitto/log
+    healthcheck:
+      test: ["CMD", "mosquitto_pub", "-h", "localhost", "-t", "$$SYS/broker/uptime", "-n"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    networks:
+      - cnp-internal
+
+  # ── CNP Gateway ──────────────────────────────────────────────────────────────
+  gateway:
+    build:
+      context: ./gateway
+      dockerfile: Dockerfile
+    container_name: cnp-gateway
+    restart: unless-stopped
+    depends_on:
+      mosquitto:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+    environment:
+      # Auth — REQUIRED: set real values in .env (never commit .env)
+      BOOTSTRAP_TOKEN: ${BOOTSTRAP_TOKEN:?BOOTSTRAP_TOKEN is required — copy .env.example to .env}
+      ADMIN_TOKEN: ${ADMIN_TOKEN:?ADMIN_TOKEN is required — copy .env.example to .env}
+      # MQTT
+      MQTT_BROKER_HOST: mosquitto
+      MQTT_BROKER_PORT: 1883
+      MQTT_USERNAME: ${MQTT_USERNAME:-}
+      MQTT_PASSWORD: ${MQTT_PASSWORD:-}
+      # Database
+      GATEWAY_DB_PATH: /data/cnp_gateway.db
+      DB_QUERY_TIMEOUT_SEC: ${DB_QUERY_TIMEOUT_SEC:-3.0}
+      # Gateway identity
+      CNP_GATEWAY_ID: ${CNP_GATEWAY_ID:-codessa-gateway-local}
+      CNP_OFFLINE_AFTER_SECONDS: ${CNP_OFFLINE_AFTER_SECONDS:-180}
+      # Network security
+      TRUSTED_PROXIES: ${TRUSTED_PROXIES:-}
+    volumes:
+      - gateway-data:/data
+    healthcheck:
+      test: ["CMD", "python", "-c",
+             "import urllib.request; urllib.request.urlopen('http://localhost:8080/api/health')"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    networks:
+      - cnp-internal
+      - cnp-external
+
+# ── Volumes ───────────────────────────────────────────────────────────────────
+volumes:
+  gateway-data:
+    driver: local
+  mosquitto-data:
+    driver: local
+  mosquitto-log:
+    driver: local
+
+# ── Networks ──────────────────────────────────────────────────────────────────
+networks:
+  # Internal: broker ↔ gateway (not exposed to host)
+  cnp-internal:
+    driver: bridge
+    internal: true
+
+  # External: gateway API exposed to host / reverse proxy
+  cnp-external:
+    driver: bridge

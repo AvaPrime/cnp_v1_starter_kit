@@ -70,4 +70,4 @@ async def test_node_hello_rejects_invalid_node_id_format(monkeypatch, app_client
         json=make_hello_envelope(node_id="cnp-test-01"),
     )
     assert response.status_code == 400
-    assert response.json()["detail"] == "Invalid node_id format"
+    assert response.json()["detail"] == "node_id must match ^[a-z0-9-]{3,64}$"

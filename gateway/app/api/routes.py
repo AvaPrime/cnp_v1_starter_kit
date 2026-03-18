@@ -223,7 +223,7 @@ async def node_hello(
 ) -> dict[str, Any]:
     envelope, raw = await _parse_envelope(request)
     node_id = envelope.node_id
-    if not _NODE_ID_PATTERN.match(node_id): raise HTTPException(status_code=400, detail='Invalid node_id format')
+    if not _NODE_ID_PATTERN.match(node_id): raise HTTPException(status_code=400, detail='node_id must match ^[a-z0-9-]{3,64}$')
     allowed, retry = check_node_rate(node_id)
     if not allowed:
         raise HTTPException(

@@ -37,10 +37,33 @@ def require_node_token(x_cnp_node_token: str | None = Header(default=None)) -> s
     return x_cnp_node_token  # type: ignore[return-value]
 
 
-def _raise_node_error(status: int, code: str, message: str, node_id: str | None) -> None:
+def _raise_node_error(request: Request, status: int, code: str, message: str, node_id: str | None) -> None:
     raise HTTPException(
         status_code=status,
-        detail={"error": {"code": code, "message": message, "details": {"node_id": node_id}}},
+        detail={
+            "error": {
+                "code": code,
+                "message": message,
+                "details": {"node_id": node_id},
+                "timestamp": _now_utc(),
+                "path": request.url.path,
+            }
+        },
+    )
+
+
+def _raise_error(request: Request, status: int, code: str, message: str, details: dict | list | None = None) -> None:
+    raise HTTPException(
+        status_code=status,
+        detail={
+            "error": {
+                "code": code,
+                "message": message,
+                "details": details or {},
+                "timestamp": _now_utc(),
+                "path": request.url.path,
+            }
+        },
     )
 
 
@@ -48,7 +71,7 @@ async def _parse_envelope(request: Request) -> tuple[Envelope, dict[str, Any]]:
     try:
         raw = await request.json()
     except Exception:
-        raise HTTPException(status_code=422, detail="Request body is not valid JSON")
+        _raise_error(request, 400, "invalid_json", "Request body is not valid JSON")
     try:
         envelope = Envelope.model_validate(raw)
     except ValidationError as exc:
@@ -58,17 +81,19 @@ async def _parse_envelope(request: Request) -> tuple[Envelope, dict[str, Any]]:
             if "node_id" in loc:
                 msg = e.get("msg", "")
                 if "field required" in msg.lower() or "required" in msg.lower():
-                    _raise_node_error(400, "missing_node_id", "node_id is required", raw.get("node_id") if isinstance(raw, dict) else None)
+                    _raise_node_error(request, 400, "missing_node_id", "node_id is required", raw.get("node_id") if isinstance(raw, dict) else None)
                 else:
-                    _raise_node_error(400, "invalid_node_id", "node_id must match ^[a-z0-9-]{3,64}$", raw.get("node_id") if isinstance(raw, dict) else None)
-        raise HTTPException(
-            status_code=422,
-            detail={
-                "error": "envelope_validation_failed",
+                    _raise_node_error(request, 400, "invalid_node_id", "node_id must match ^[a-z0-9-]{3,64}$", raw.get("node_id") if isinstance(raw, dict) else None)
+        _raise_error(
+            request,
+            400,
+            "invalid_envelope",
+            "envelope validation failed",
+            {
                 "fields": [
                     {"field": ".".join(str(p) for p in e["loc"]), "message": e["msg"]}
                     for e in errors
-                ],
+                ]
             },
         )
     return envelope, raw
@@ -109,7 +134,7 @@ async def list_nodes(
 
 
 @router.get("/nodes/{node_id}")
-async def get_node(node_id: str) -> dict[str, Any]:
+async def get_node(request: Request, node_id: str) -> dict[str, Any]:
     async with aiosqlite.connect(settings.gateway_db_path) as db:
         db.row_factory = aiosqlite.Row
         async with db.execute(
@@ -117,12 +142,13 @@ async def get_node(node_id: str) -> dict[str, Any]:
         ) as cur:
             row = await cur.fetchone()
     if not row:
-        _raise_node_error(404, "node_not_found", "node_id not found", node_id)
+        _raise_node_error(request, 404, "node_not_found", "node_id not found", node_id)
     return NodeResponse.from_row(dict(row)).model_dump()
 
 
 @router.post("/nodes/{node_id}/commands")
 async def send_command(
+    request: Request,
     node_id: str,
     command: CommandRequest,
     bridge=Depends(get_bridge),
@@ -131,7 +157,7 @@ async def send_command(
         async with db.execute("SELECT 1 FROM nodes WHERE node_id=?", (node_id,)) as cur:
             exists = await cur.fetchone()
     if not exists:
-        _raise_node_error(404, "node_not_found", "node_id not found", node_id)
+        _raise_node_error(request, 404, "node_not_found", "node_id not found", node_id)
     command_id = str(uuid4())
     payload = {
         "command_id": command_id,
@@ -150,14 +176,14 @@ async def send_command(
 
 @router.patch("/nodes/{node_id}/config")
 async def update_node_config(
-    node_id: str, request: Request
+    request: Request, node_id: str
 ) -> dict[str, Any]:
     body = await request.json()
     async with aiosqlite.connect(settings.gateway_db_path) as db:
         async with db.execute("SELECT 1 FROM nodes WHERE node_id=?", (node_id,)) as cur:
             exists = await cur.fetchone()
         if not exists:
-            _raise_node_error(404, "node_not_found", "node_id not found", node_id)
+            _raise_node_error(request, 404, "node_not_found", "node_id not found", node_id)
         await db.execute(
             """
             INSERT INTO node_config
@@ -247,7 +273,7 @@ async def node_hello(
 ) -> dict[str, Any]:
     envelope, raw = await _parse_envelope(request)
     node_id = envelope.node_id
-    if not _NODE_ID_PATTERN.match(node_id): _raise_node_error(400, "invalid_node_id", "node_id must match ^[a-z0-9-]{3,64}$", node_id)
+    if not _NODE_ID_PATTERN.match(node_id): _raise_node_error(request, 400, "invalid_node_id", "node_id must match ^[a-z0-9-]{3,64}$", node_id)
     allowed, retry = check_node_rate(node_id)
     if not allowed:
         raise HTTPException(

@@ -13,10 +13,12 @@ log = logging.getLogger("cnp.admin")
 router = APIRouter()
 
 
-def _raise_node_error(status: int, code: str, message: str, node_id: str | None) -> None:
+def _raise_node_error(request, status: int, code: str, message: str, node_id: str | None) -> None:
+    from datetime import datetime, timezone
+    ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     raise HTTPException(
         status_code=status,
-        detail={"error": {"code": code, "message": message, "details": {"node_id": node_id}}},
+        detail={"error": {"code": code, "message": message, "details": {"node_id": node_id}, "timestamp": ts, "path": request.url.path}},
     )
 
 
@@ -57,11 +59,11 @@ class ProvisionResponse(BaseModel):
 
 
 @router.post("/nodes/{node_id}/provision")
-async def provision_secret(node_id: str) -> ProvisionResponse:
+async def provision_secret(request, node_id: str) -> ProvisionResponse:
     try:
         plain = await provision_node_secret(settings.gateway_db_path, node_id)
     except ValueError as exc:
-        _raise_node_error(404, "node_not_found", "node_id not found", node_id)
+        _raise_node_error(request, 404, "node_not_found", "node_id not found", node_id)
     return ProvisionResponse(
         node_id=node_id,
         secret=plain,
@@ -74,11 +76,11 @@ async def provision_secret(node_id: str) -> ProvisionResponse:
 
 
 @router.post("/nodes/{node_id}/rotate-secret")
-async def rotate_secret(node_id: str) -> ProvisionResponse:
+async def rotate_secret(request, node_id: str) -> ProvisionResponse:
     try:
         plain = await rotate_node_secret(settings.gateway_db_path, node_id)
     except ValueError as exc:
-        _raise_node_error(404, "node_not_found", "node_id not found", node_id)
+        _raise_node_error(request, 404, "node_not_found", "node_id not found", node_id)
     return ProvisionResponse(
         node_id=node_id,
         secret=plain,

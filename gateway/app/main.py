@@ -3,8 +3,10 @@ import asyncio
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
-from fastapi.exceptions import HTTPException as StarletteHTTPException
+from fastapi.exceptions import HTTPException as StarletteHTTPException, RequestValidationError
 from fastapi.responses import JSONResponse
+from fastapi.openapi.utils import get_openapi
+from datetime import datetime, timezone
 
 from .api.routes import router
 from .api.compat import router as compat_router
@@ -45,6 +47,77 @@ app.include_router(admin_router, prefix="/api")
 
 @app.exception_handler(StarletteHTTPException)
 async def http_exception_handler(request: Request, exc: StarletteHTTPException):
+    def now() -> str:
+        return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     if isinstance(exc.detail, dict) and "error" in exc.detail:
-        return JSONResponse(status_code=exc.status_code, content=exc.detail)
-    return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
+        err = exc.detail["error"]
+        err.setdefault("timestamp", now())
+        err.setdefault("path", request.url.path)
+        return JSONResponse(status_code=exc.status_code, content={"error": err})
+    code = "http_error"
+    message = str(exc.detail)
+    payload = {
+        "error": {
+            "code": code,
+            "message": message,
+            "details": {},
+            "timestamp": now(),
+            "path": request.url.path,
+        }
+    }
+    return JSONResponse(status_code=exc.status_code, content=payload)
+
+
+@app.exception_handler(RequestValidationError)
+async def request_validation_exception_handler(request: Request, exc: RequestValidationError):
+    def now() -> str:
+        return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    fields = []
+    for e in exc.errors():
+        fields.append({"field": ".".join(str(p) for p in e.get("loc", [])), "message": e.get("msg", "")})
+    payload = {
+        "error": {
+            "code": "request_validation_failed",
+            "message": "The request is invalid",
+            "details": {"fields": fields},
+            "timestamp": now(),
+            "path": request.url.path,
+        }
+    }
+    return JSONResponse(status_code=400, content=payload)
+
+
+def custom_openapi():
+    if app.openapi_schema:
+        return app.openapi_schema
+    openapi_schema = get_openapi(
+        title=app.title,
+        version=app.version,
+        description="CNP Gateway API",
+        routes=app.routes,
+    )
+    comps = openapi_schema.setdefault("components", {}).setdefault("schemas", {})
+    comps.pop("HTTPValidationError", None)
+    comps.pop("ValidationError", None)
+    comps["ErrorResponse"] = {
+        "type": "object",
+        "properties": {
+            "error": {
+                "type": "object",
+                "properties": {
+                    "code": {"type": "string"},
+                    "message": {"type": "string"},
+                    "details": {"type": "object"},
+                    "timestamp": {"type": "string"},
+                    "path": {"type": "string"},
+                },
+                "required": ["code", "message", "details", "timestamp", "path"],
+            }
+        },
+        "required": ["error"],
+    }
+    app.openapi_schema = openapi_schema
+    return app.openapi_schema
+
+
+app.openapi = custom_openapi

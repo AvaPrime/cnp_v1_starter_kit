@@ -76,6 +76,8 @@ async def test_node_hello_rejects_invalid_node_id_format(monkeypatch, app_client
     assert payload["error"]["code"] == "invalid_node_id"
     assert payload["error"]["message"] == "node_id must match ^[a-z0-9-]{3,64}$"
     assert payload["error"]["details"]["node_id"] in (node_id, None)
+    assert "timestamp" in payload["error"]
+    assert "path" in payload["error"]
 
 
 @pytest.mark.asyncio
@@ -112,6 +114,8 @@ async def test_node_hello_missing_node_id_shape(monkeypatch, app_client):
     assert payload["error"]["code"] == "missing_node_id"
     assert payload["error"]["message"] == "node_id is required"
     assert payload["error"]["details"]["node_id"] is None
+    assert "timestamp" in payload["error"]
+    assert "path" in payload["error"]
 
 
 @pytest.mark.asyncio
@@ -123,6 +127,8 @@ async def test_get_node_not_found_shape(app_client):
     assert payload["error"]["code"] == "node_not_found"
     assert payload["error"]["message"] == "node_id not found"
     assert payload["error"]["details"]["node_id"] == "does-not-exist-123"
+    assert "timestamp" in payload["error"]
+    assert "path" in payload["error"]
 
 
 @pytest.mark.asyncio
@@ -141,6 +147,8 @@ async def test_compat_hello_invalid_node_id_shape(app_client):
     assert payload["error"]["code"] == "invalid_node_id"
     assert payload["error"]["message"] == "node_id must match ^[a-z0-9-]{3,64}$"
     assert payload["error"]["details"]["node_id"] == bad_id
+    assert "timestamp" in payload["error"]
+    assert "path" in payload["error"]
 
 
 @pytest.mark.asyncio
@@ -162,6 +170,8 @@ async def test_commands_endpoint_node_not_found_shape(app_client):
     assert payload["error"]["code"] == "node_not_found"
     assert payload["error"]["message"] == "node_id not found"
     assert payload["error"]["details"]["node_id"] == "nonexistent-01"
+    assert "timestamp" in payload["error"]
+    assert "path" in payload["error"]
 
 
 @pytest.mark.asyncio
@@ -175,3 +185,54 @@ async def test_update_config_node_not_found_shape(app_client):
     assert payload["error"]["code"] == "node_not_found"
     assert payload["error"]["message"] == "node_id not found"
     assert payload["error"]["details"]["node_id"] == "missing-xyz"
+    assert "timestamp" in payload["error"]
+    assert "path" in payload["error"]
+
+
+@pytest.mark.asyncio
+async def test_send_command_request_validation_shape(app_client):
+    # Missing command_type should trigger RequestValidationError
+    body = {
+        # "command_type": "reboot",  # omitted
+        "category": "maintenance",
+        "timeout_ms": 2000,
+        "arguments": {},
+        "issued_by": "test",
+        "dry_run": False,
+    }
+    response = await app_client.post("/api/nodes/cnp-test-01/commands", json=body)
+    assert response.status_code == 400
+    payload = response.json()
+    assert "detail" not in payload
+    assert payload["error"]["code"] == "request_validation_failed"
+    assert payload["error"]["message"] == "The request is invalid"
+    assert "fields" in payload["error"]["details"]
+    assert "timestamp" in payload["error"]
+    assert "path" in payload["error"]
+
+
+@pytest.mark.asyncio
+async def test_invalid_json_envelope_shape(app_client):
+    # Force invalid JSON payload for /api/node/hello
+    headers = auth_headers()
+    headers["Content-Type"] = "application/json"
+    response = await app_client.post("/api/node/hello", headers=headers, content="{ invalid-json")
+    assert response.status_code == 400
+    payload = response.json()
+    assert "detail" not in payload
+    assert payload["error"]["code"] == "invalid_json"
+    assert payload["error"]["message"] == "Request body is not valid JSON"
+    assert "timestamp" in payload["error"]
+    assert "path" in payload["error"]
+
+
+def test_openapi_has_no_legacy_validation(client: TestClient | None = None):
+    from app.main import app
+    client = client or TestClient(app)
+    resp = client.get("/openapi.json")
+    assert resp.status_code == 200
+    data = resp.json()
+    schemas = data.get("components", {}).get("schemas", {})
+    assert "HTTPValidationError" not in schemas
+    assert "ValidationError" not in schemas
+    assert "ErrorResponse" in schemas

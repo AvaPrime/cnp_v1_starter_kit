@@ -37,6 +37,13 @@ def require_node_token(x_cnp_node_token: str | None = Header(default=None)) -> s
     return x_cnp_node_token  # type: ignore[return-value]
 
 
+def _raise_node_error(status: int, code: str, message: str, node_id: str | None) -> None:
+    raise HTTPException(
+        status_code=status,
+        detail={"error": {"code": code, "message": message, "details": {"node_id": node_id}}},
+    )
+
+
 async def _parse_envelope(request: Request) -> tuple[Envelope, dict[str, Any]]:
     try:
         raw = await request.json()
@@ -46,6 +53,14 @@ async def _parse_envelope(request: Request) -> tuple[Envelope, dict[str, Any]]:
         envelope = Envelope.model_validate(raw)
     except ValidationError as exc:
         errors = exc.errors()
+        for e in errors:
+            loc = [str(p) for p in e.get("loc", [])]
+            if "node_id" in loc:
+                msg = e.get("msg", "")
+                if "field required" in msg.lower() or "required" in msg.lower():
+                    _raise_node_error(400, "missing_node_id", "node_id is required", raw.get("node_id") if isinstance(raw, dict) else None)
+                else:
+                    _raise_node_error(400, "invalid_node_id", "node_id must match ^[a-z0-9-]{3,64}$", raw.get("node_id") if isinstance(raw, dict) else None)
         raise HTTPException(
             status_code=422,
             detail={
@@ -102,7 +117,7 @@ async def get_node(node_id: str) -> dict[str, Any]:
         ) as cur:
             row = await cur.fetchone()
     if not row:
-        raise HTTPException(status_code=404, detail="Node not found")
+        _raise_node_error(404, "node_not_found", "node_id not found", node_id)
     return NodeResponse.from_row(dict(row)).model_dump()
 
 
@@ -112,6 +127,11 @@ async def send_command(
     command: CommandRequest,
     bridge=Depends(get_bridge),
 ) -> dict[str, Any]:
+    async with aiosqlite.connect(settings.gateway_db_path) as db:
+        async with db.execute("SELECT 1 FROM nodes WHERE node_id=?", (node_id,)) as cur:
+            exists = await cur.fetchone()
+    if not exists:
+        _raise_node_error(404, "node_not_found", "node_id not found", node_id)
     command_id = str(uuid4())
     payload = {
         "command_id": command_id,
@@ -134,6 +154,10 @@ async def update_node_config(
 ) -> dict[str, Any]:
     body = await request.json()
     async with aiosqlite.connect(settings.gateway_db_path) as db:
+        async with db.execute("SELECT 1 FROM nodes WHERE node_id=?", (node_id,)) as cur:
+            exists = await cur.fetchone()
+        if not exists:
+            _raise_node_error(404, "node_not_found", "node_id not found", node_id)
         await db.execute(
             """
             INSERT INTO node_config
@@ -223,7 +247,7 @@ async def node_hello(
 ) -> dict[str, Any]:
     envelope, raw = await _parse_envelope(request)
     node_id = envelope.node_id
-    if not _NODE_ID_PATTERN.match(node_id): raise HTTPException(status_code=400, detail='node_id must match ^[a-z0-9-]{3,64}$')
+    if not _NODE_ID_PATTERN.match(node_id): _raise_node_error(400, "invalid_node_id", "node_id must match ^[a-z0-9-]{3,64}$", node_id)
     allowed, retry = check_node_rate(node_id)
     if not allowed:
         raise HTTPException(

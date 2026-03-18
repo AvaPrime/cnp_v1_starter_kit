@@ -13,6 +13,7 @@ from ..core.rate_limit import check_node_rate
 from ..core.registry import upsert_node, update_heartbeat
 from ..core.storage import insert_error, insert_event, upsert_command_result
 from .routes import require_node_token
+from ..models.schemas import _NODE_ID_PATTERN
 
 log = logging.getLogger("cnp.compat")
 router = APIRouter()
@@ -90,6 +91,13 @@ def _now() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
+def _raise_node_error(status: int, code: str, message: str, node_id: str | None) -> None:
+    raise HTTPException(
+        status_code=status,
+        detail={"error": {"code": code, "message": message, "details": {"node_id": node_id}}},
+    )
+
+
 @router.post("/node/hello")
 async def compat_hello(
     request: Request,
@@ -98,6 +106,10 @@ async def compat_hello(
     raw = await request.json()
     raw = _translate_envelope(raw)
     node_id = raw.get("node_id", "")
+    if not node_id:
+        _raise_node_error(400, "missing_node_id", "node_id is required", None)
+    if not _NODE_ID_PATTERN.match(node_id):
+        _raise_node_error(400, "invalid_node_id", "node_id must match ^[a-z0-9-]{3,64}$", node_id)
     allowed, retry = check_node_rate(node_id)
     if not allowed:
         raise HTTPException(

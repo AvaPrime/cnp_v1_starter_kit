@@ -13,6 +13,13 @@ log = logging.getLogger("cnp.admin")
 router = APIRouter()
 
 
+def _raise_node_error(status: int, code: str, message: str, node_id: str | None) -> None:
+    raise HTTPException(
+        status_code=status,
+        detail={"error": {"code": code, "message": message, "details": {"node_id": node_id}}},
+    )
+
+
 @router.get("/fleet/status")
 async def fleet_status() -> dict[str, Any]:
     async with aiosqlite.connect(settings.gateway_db_path) as db:
@@ -54,7 +61,7 @@ async def provision_secret(node_id: str) -> ProvisionResponse:
     try:
         plain = await provision_node_secret(settings.gateway_db_path, node_id)
     except ValueError as exc:
-        raise HTTPException(status_code=404, detail=str(exc))
+        _raise_node_error(404, "node_not_found", "node_id not found", node_id)
     return ProvisionResponse(
         node_id=node_id,
         secret=plain,
@@ -71,7 +78,7 @@ async def rotate_secret(node_id: str) -> ProvisionResponse:
     try:
         plain = await rotate_node_secret(settings.gateway_db_path, node_id)
     except ValueError as exc:
-        raise HTTPException(status_code=404, detail=str(exc))
+        _raise_node_error(404, "node_not_found", "node_id not found", node_id)
     return ProvisionResponse(
         node_id=node_id,
         secret=plain,

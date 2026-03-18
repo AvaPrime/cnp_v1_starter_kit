@@ -29,7 +29,6 @@ CREATE TABLE IF NOT EXISTS nodes (
   firmware_version TEXT NOT NULL,
   hardware_model TEXT NOT NULL,
   capabilities_json TEXT NOT NULL,
-  node_secret_hash TEXT,
   config_version INTEGER NOT NULL DEFAULT 1,
   status TEXT NOT NULL DEFAULT 'unknown',
   last_seen_utc TEXT,
@@ -156,9 +155,5 @@ async def init_db(path: str) -> None:
     """Initialise schema and apply all pragmas. Called once at lifespan start."""
     async with db_connect(path) as db:
         await db.executescript(SCHEMA_SQL)
-        async with db.execute("PRAGMA table_info(nodes)") as cur:
-            cols = [r["name"] for r in await cur.fetchall()]
-        if "node_secret_hash" not in cols:
-            await db.execute("ALTER TABLE nodes ADD COLUMN node_secret_hash TEXT")
         await db.commit()
     log.info("db.init_ok path=%s", path)

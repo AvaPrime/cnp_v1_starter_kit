@@ -1,0 +1,70 @@
+# CNP v1 Starter Kit — .gitignore
+# Audit fix P0-06: this file was missing entirely.
+
+# ── Python ───────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+.eggs/
+*.egg
+pip-wheel-metadata/
+.installed.cfg
+lib/
+lib64/
+
+# ── Virtual environments ──────────────────────────────────────────────────────
+.venv/
+venv/
+env/
+ENV/
+.env.local
+
+# ── Environment variables — NEVER commit real secrets ────────────────────────
+.env
+.env.*
+!.env.example
+
+# ── Databases — NEVER commit SQLite files (audit P0-07) ──────────────────────
+*.db
+*.sqlite
+*.sqlite3
+
+# ── Test + coverage artifacts ─────────────────────────────────────────────────
+.coverage
+coverage.xml
+htmlcov/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# ── IDE / editor ─────────────────────────────────────────────────────────────
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# ── Analysis outputs (internal only) ─────────────────────────────────────────
+analysis/out/server_*.log
+
+# ── PlatformIO (firmware) ─────────────────────────────────────────────────────
+.pio/
+firmware/.pio/
+
+# ── Node.js (if any tooling scripts use npm) ─────────────────────────────────
+node_modules/
+
+# ── Docker ───────────────────────────────────────────────────────────────────
+# Keep Dockerfile and docker-compose.yml but ignore build cache
+.docker/
+
+# ── Distribution / packaging ──────────────────────────────────────────────────
+*.whl
+*.tar.gz
+MANIFEST

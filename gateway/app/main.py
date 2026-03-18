@@ -2,7 +2,9 @@ from __future__ import annotations
 import asyncio
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.exceptions import HTTPException as StarletteHTTPException
+from fastapi.responses import JSONResponse
 
 from .api.routes import router
 from .api.compat import router as compat_router
@@ -39,3 +41,10 @@ app.add_middleware(RateLimitMiddleware)
 app.include_router(router, prefix="/api")
 app.include_router(compat_router, prefix="/v1/compat")
 app.include_router(admin_router, prefix="/api")
+
+
+@app.exception_handler(StarletteHTTPException)
+async def http_exception_handler(request: Request, exc: StarletteHTTPException):
+    if isinstance(exc.detail, dict) and "error" in exc.detail:
+        return JSONResponse(status_code=exc.status_code, content=exc.detail)
+    return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})

@@ -122,6 +122,7 @@ async def app_client(db_path: str, mock_bridge: MockMqttBridge) -> AsyncGenerato
     from dataclasses import replace
     original_settings = cfg_module.settings
     cfg_module.settings = replace(original_settings, gateway_db_path=db_path)
+    main_module.settings = cfg_module.settings
 
     async with AsyncClient(
         transport=ASGITransport(app=app),

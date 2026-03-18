@@ -6,6 +6,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from conftest import auth_headers, make_hello_envelope
+from conftest import _now_utc
 
 
 def test_health():

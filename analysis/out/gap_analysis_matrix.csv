@@ -1,0 +1,20 @@
+Functionality,Current State,Target State,Impact,Effort (person-days),Risk,Owner,Tag,Color
+GET /api/alerts,prod,parity,Med,2,Med,Gateway,quick_win,#ffd966
+GET /api/events,prod,parity,Med,2,Med,Gateway,quick_win,#ffd966
+GET /api/node/commands/{node_id},prod,parity,Med,2,Med,Gateway,quick_win,#ffd966
+GET /health,prod,parity,Med,2,Med,Gateway,quick_win,#ffd966
+PATCH /api/nodes/{node_id}/config,prod,parity,Med,2,Med,Gateway,quick_win,#ffd966
+POST /api/commands,prod,parity,Med,2,Med,Gateway,quick_win,#ffd966
+POST /api/node/command_result,prod,parity,Med,2,Med,Gateway,quick_win,#ffd966
+POST /api/node/error,prod,parity,Med,2,Med,Gateway,quick_win,#ffd966
+POST /api/node/event,prod,parity,Med,2,Med,Gateway,quick_win,#ffd966
+POST /api/node/heartbeat,prod,parity,Med,2,Med,Gateway,quick_win,#ffd966
+POST /api/node/hello,prod,parity,Med,2,Med,Gateway,quick_win,#ffd966
+POST /api/node/state,prod,parity,Med,2,Med,Gateway,quick_win,#ffd966
+Node registration,prod,parity,High,5,Med,Gateway,debt_hotspot,#f4cccc
+Heartbeat ingest,prod,parity,High,5,Med,Gateway,debt_hotspot,#f4cccc
+Event ingest,prod,parity,High,5,Med,Gateway,debt_hotspot,#f4cccc
+Error ingest,prod,parity,High,5,Med,Gateway,debt_hotspot,#f4cccc
+Update node config,prod,parity,High,5,Med,Gateway,debt_hotspot,#f4cccc
+Recent alerts,prod,parity,High,5,Med,Gateway,debt_hotspot,#f4cccc
+Command round-trip,prod,parity,High,5,Med,Gateway,debt_hotspot,#f4cccc

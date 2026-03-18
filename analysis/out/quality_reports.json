@@ -1,0 +1,511 @@
+{
+  "files": {
+    "bandit": {
+      "exit_code": 1,
+      "report": {
+        "errors": [],
+        "generated_at": "2026-03-18T13:36:06Z",
+        "metrics": {
+          "_totals": {
+            "CONFIDENCE.HIGH": 3,
+            "CONFIDENCE.LOW": 0,
+            "CONFIDENCE.MEDIUM": 1,
+            "CONFIDENCE.UNDEFINED": 0,
+            "SEVERITY.HIGH": 0,
+            "SEVERITY.LOW": 3,
+            "SEVERITY.MEDIUM": 1,
+            "SEVERITY.UNDEFINED": 0,
+            "loc": 1129,
+            "nosec": 0,
+            "skipped_tests": 0
+          },
+          "c:\\Projects\\files\\analysis\\run_comparative_analysis.py": {
+            "CONFIDENCE.HIGH": 3,
+            "CONFIDENCE.LOW": 0,
+            "CONFIDENCE.MEDIUM": 0,
+            "CONFIDENCE.UNDEFINED": 0,
+            "SEVERITY.HIGH": 0,
+            "SEVERITY.LOW": 3,
+            "SEVERITY.MEDIUM": 0,
+            "SEVERITY.UNDEFINED": 0,
+            "loc": 680,
+            "nosec": 0,
+            "skipped_tests": 0
+          },
+          "c:\\Projects\\files\\gateway.py": {
+            "CONFIDENCE.HIGH": 0,
+            "CONFIDENCE.LOW": 0,
+            "CONFIDENCE.MEDIUM": 1,
+            "CONFIDENCE.UNDEFINED": 0,
+            "SEVERITY.HIGH": 0,
+            "SEVERITY.LOW": 0,
+            "SEVERITY.MEDIUM": 1,
+            "SEVERITY.UNDEFINED": 0,
+            "loc": 449,
+            "nosec": 0,
+            "skipped_tests": 0
+          }
+        },
+        "results": [
+          {
+            "code": "8 import statistics\n9 import subprocess\n10 import sys\n",
+            "col_offset": 0,
+            "end_col_offset": 17,
+            "filename": "c:\\Projects\\files\\analysis\\run_comparative_analysis.py",
+            "issue_confidence": "HIGH",
+            "issue_cwe": {
+              "id": 78,
+              "link": "https://cwe.mitre.org/data/definitions/78.html"
+            },
+            "issue_severity": "LOW",
+            "issue_text": "Consider possible security implications associated with the subprocess module.",
+            "line_number": 9,
+            "line_range": [
+              9
+            ],
+            "more_info": "https://bandit.readthedocs.io/en/1.9.4/blacklists/blacklist_imports.html#b404-import-subprocess",
+            "test_id": "B404",
+            "test_name": "blacklist"
+          },
+          {
+            "code": "63 def run(cmd: list[str], cwd: Path | None = None, timeout_s: int | None = None) -> tuple[int, str]:\n64     p = subprocess.run(\n65         cmd,\n66         cwd=str(cwd) if cwd else None,\n67         stdout=subprocess.PIPE,\n68         stderr=subprocess.STDOUT,\n69         text=True,\n70         timeout=timeout_s,\n71         env={**os.environ, \"PYTHONUNBUFFERED\": \"1\"},\n72     )\n73     return p.returncode, p.stdout\n",
+            "col_offset": 8,
+            "end_col_offset": 5,
+            "filename": "c:\\Projects\\files\\analysis\\run_comparative_analysis.py",
+            "issue_confidence": "HIGH",
+            "issue_cwe": {
+              "id": 78,
+              "link": "https://cwe.mitre.org/data/definitions/78.html"
+            },
+            "issue_severity": "LOW",
+            "issue_text": "subprocess call - check for execution of untrusted input.",
+            "line_number": 64,
+            "line_range": [
+              64,
+              65,
+              66,
+              67,
+              68,
+              69,
+              70,
+              71,
+              72
+            ],
+            "more_info": "https://bandit.readthedocs.io/en/1.9.4/plugins/b603_subprocess_without_shell_equals_true.html",
+            "test_id": "B603",
+            "test_name": "subprocess_without_shell_equals_true"
+          },
+          {
+            "code": "312 def run_gateway_load_suite(sut: SystemUnderTest) -> dict[str, Any]:\n313     proc = subprocess.Popen(\n314         sut.start_cmd,\n315         cwd=str(sut.cwd),\n316         stdout=subprocess.PIPE,\n317         stderr=subprocess.STDOUT,\n318         text=True,\n319         env={**os.environ, \"PYTHONUNBUFFERED\": \"1\"},\n320     )\n321     ps_proc = psutil.Process(proc.pid)\n",
+            "col_offset": 11,
+            "end_col_offset": 5,
+            "filename": "c:\\Projects\\files\\analysis\\run_comparative_analysis.py",
+            "issue_confidence": "HIGH",
+            "issue_cwe": {
+              "id": 78,
+              "link": "https://cwe.mitre.org/data/definitions/78.html"
+            },
+            "issue_severity": "LOW",
+            "issue_text": "subprocess call - check for execution of untrusted input.",
+            "line_number": 313,
+            "line_range": [
+              313,
+              314,
+              315,
+              316,
+              317,
+              318,
+              319,
+              320
+            ],
+            "more_info": "https://bandit.readthedocs.io/en/1.9.4/plugins/b603_subprocess_without_shell_equals_true.html",
+            "test_id": "B603",
+            "test_name": "subprocess_without_shell_equals_true"
+          },
+          {
+            "code": "41 SCHEMA_PATH      = \"node_registry.sql\"\n42 GATEWAY_HOST     = \"0.0.0.0\"\n43 GATEWAY_PORT     = 5000\n",
+            "col_offset": 19,
+            "end_col_offset": 28,
+            "filename": "c:\\Projects\\files\\gateway.py",
+            "issue_confidence": "MEDIUM",
+            "issue_cwe": {
+              "id": 605,
+              "link": "https://cwe.mitre.org/data/definitions/605.html"
+            },
+            "issue_severity": "MEDIUM",
+            "issue_text": "Possible binding to all interfaces.",
+            "line_number": 42,
+            "line_range": [
+              42
+            ],
+            "more_info": "https://bandit.readthedocs.io/en/1.9.4/plugins/b104_hardcoded_bind_all_interfaces.html",
+            "test_id": "B104",
+            "test_name": "hardcoded_bind_all_interfaces"
+          }
+        ]
+      }
+    },
+    "complexity": [
+      {
+        "file": "c:\\Projects\\files\\gateway.py",
+        "functions": [
+          {
+            "ccn": 1,
+            "line": 61,
+            "name": "get_db",
+            "path": "c:\\Projects\\files\\gateway.py"
+          },
+          {
+            "ccn": 2,
+            "line": 69,
+            "name": "init_db",
+            "path": "c:\\Projects\\files\\gateway.py"
+          },
+          {
+            "ccn": 1,
+            "line": 81,
+            "name": "now_utc",
+            "path": "c:\\Projects\\files\\gateway.py"
+          },
+          {
+            "ccn": 4,
+            "line": 88,
+            "name": "verify_token",
+            "path": "c:\\Projects\\files\\gateway.py"
+          }
+        ]
+      }
+    ],
+    "duplication": {
+      "duplication_pct": 51.126126126126124,
+      "total_lines": 444
+    }
+  },
+  "prod": {
+    "bandit": {
+      "exit_code": 1,
+      "report": {
+        "errors": [],
+        "generated_at": "2026-03-18T13:36:07Z",
+        "metrics": {
+          "_totals": {
+            "CONFIDENCE.HIGH": 2,
+            "CONFIDENCE.LOW": 0,
+            "CONFIDENCE.MEDIUM": 0,
+            "CONFIDENCE.UNDEFINED": 0,
+            "SEVERITY.HIGH": 0,
+            "SEVERITY.LOW": 2,
+            "SEVERITY.MEDIUM": 0,
+            "SEVERITY.UNDEFINED": 0,
+            "loc": 482,
+            "nosec": 0,
+            "skipped_tests": 0
+          },
+          "c:\\Projects\\cnp_v1_starter_kit\\gateway\\app\\__init__.py": {
+            "CONFIDENCE.HIGH": 0,
+            "CONFIDENCE.LOW": 0,
+            "CONFIDENCE.MEDIUM": 0,
+            "CONFIDENCE.UNDEFINED": 0,
+            "SEVERITY.HIGH": 0,
+            "SEVERITY.LOW": 0,
+            "SEVERITY.MEDIUM": 0,
+            "SEVERITY.UNDEFINED": 0,
+            "loc": 0,
+            "nosec": 0,
+            "skipped_tests": 0
+          },
+          "c:\\Projects\\cnp_v1_starter_kit\\gateway\\app\\api\\__init__.py": {
+            "CONFIDENCE.HIGH": 0,
+            "CONFIDENCE.LOW": 0,
+            "CONFIDENCE.MEDIUM": 0,
+            "CONFIDENCE.UNDEFINED": 0,
+            "SEVERITY.HIGH": 0,
+            "SEVERITY.LOW": 0,
+            "SEVERITY.MEDIUM": 0,
+            "SEVERITY.UNDEFINED": 0,
+            "loc": 0,
+            "nosec": 0,
+            "skipped_tests": 0
+          },
+          "c:\\Projects\\cnp_v1_starter_kit\\gateway\\app\\api\\routes.py": {
+            "CONFIDENCE.HIGH": 0,
+            "CONFIDENCE.LOW": 0,
+            "CONFIDENCE.MEDIUM": 0,
+            "CONFIDENCE.UNDEFINED": 0,
+            "SEVERITY.HIGH": 0,
+            "SEVERITY.LOW": 0,
+            "SEVERITY.MEDIUM": 0,
+            "SEVERITY.UNDEFINED": 0,
+            "loc": 47,
+            "nosec": 0,
+            "skipped_tests": 0
+          },
+          "c:\\Projects\\cnp_v1_starter_kit\\gateway\\app\\core\\__init__.py": {
+            "CONFIDENCE.HIGH": 0,
+            "CONFIDENCE.LOW": 0,
+            "CONFIDENCE.MEDIUM": 0,
+            "CONFIDENCE.UNDEFINED": 0,
+            "SEVERITY.HIGH": 0,
+            "SEVERITY.LOW": 0,
+            "SEVERITY.MEDIUM": 0,
+            "SEVERITY.UNDEFINED": 0,
+            "loc": 0,
+            "nosec": 0,
+            "skipped_tests": 0
+          },
+          "c:\\Projects\\cnp_v1_starter_kit\\gateway\\app\\core\\config.py": {
+            "CONFIDENCE.HIGH": 0,
+            "CONFIDENCE.LOW": 0,
+            "CONFIDENCE.MEDIUM": 0,
+            "CONFIDENCE.UNDEFINED": 0,
+            "SEVERITY.HIGH": 0,
+            "SEVERITY.LOW": 0,
+            "SEVERITY.MEDIUM": 0,
+            "SEVERITY.UNDEFINED": 0,
+            "loc": 13,
+            "nosec": 0,
+            "skipped_tests": 0
+          },
+          "c:\\Projects\\cnp_v1_starter_kit\\gateway\\app\\core\\db.py": {
+            "CONFIDENCE.HIGH": 0,
+            "CONFIDENCE.LOW": 0,
+            "CONFIDENCE.MEDIUM": 0,
+            "CONFIDENCE.UNDEFINED": 0,
+            "SEVERITY.HIGH": 0,
+            "SEVERITY.LOW": 0,
+            "SEVERITY.MEDIUM": 0,
+            "SEVERITY.UNDEFINED": 0,
+            "loc": 81,
+            "nosec": 0,
+            "skipped_tests": 0
+          },
+          "c:\\Projects\\cnp_v1_starter_kit\\gateway\\app\\core\\mqtt_client.py": {
+            "CONFIDENCE.HIGH": 0,
+            "CONFIDENCE.LOW": 0,
+            "CONFIDENCE.MEDIUM": 0,
+            "CONFIDENCE.UNDEFINED": 0,
+            "SEVERITY.HIGH": 0,
+            "SEVERITY.LOW": 0,
+            "SEVERITY.MEDIUM": 0,
+            "SEVERITY.UNDEFINED": 0,
+            "loc": 86,
+            "nosec": 0,
+            "skipped_tests": 0
+          },
+          "c:\\Projects\\cnp_v1_starter_kit\\gateway\\app\\core\\registry.py": {
+            "CONFIDENCE.HIGH": 0,
+            "CONFIDENCE.LOW": 0,
+            "CONFIDENCE.MEDIUM": 0,
+            "CONFIDENCE.UNDEFINED": 0,
+            "SEVERITY.HIGH": 0,
+            "SEVERITY.LOW": 0,
+            "SEVERITY.MEDIUM": 0,
+            "SEVERITY.UNDEFINED": 0,
+            "loc": 83,
+            "nosec": 0,
+            "skipped_tests": 0
+          },
+          "c:\\Projects\\cnp_v1_starter_kit\\gateway\\app\\core\\storage.py": {
+            "CONFIDENCE.HIGH": 0,
+            "CONFIDENCE.LOW": 0,
+            "CONFIDENCE.MEDIUM": 0,
+            "CONFIDENCE.UNDEFINED": 0,
+            "SEVERITY.HIGH": 0,
+            "SEVERITY.LOW": 0,
+            "SEVERITY.MEDIUM": 0,
+            "SEVERITY.UNDEFINED": 0,
+            "loc": 101,
+            "nosec": 0,
+            "skipped_tests": 0
+          },
+          "c:\\Projects\\cnp_v1_starter_kit\\gateway\\app\\main.py": {
+            "CONFIDENCE.HIGH": 0,
+            "CONFIDENCE.LOW": 0,
+            "CONFIDENCE.MEDIUM": 0,
+            "CONFIDENCE.UNDEFINED": 0,
+            "SEVERITY.HIGH": 0,
+            "SEVERITY.LOW": 0,
+            "SEVERITY.MEDIUM": 0,
+            "SEVERITY.UNDEFINED": 0,
+            "loc": 26,
+            "nosec": 0,
+            "skipped_tests": 0
+          },
+          "c:\\Projects\\cnp_v1_starter_kit\\gateway\\app\\models\\__init__.py": {
+            "CONFIDENCE.HIGH": 0,
+            "CONFIDENCE.LOW": 0,
+            "CONFIDENCE.MEDIUM": 0,
+            "CONFIDENCE.UNDEFINED": 0,
+            "SEVERITY.HIGH": 0,
+            "SEVERITY.LOW": 0,
+            "SEVERITY.MEDIUM": 0,
+            "SEVERITY.UNDEFINED": 0,
+            "loc": 0,
+            "nosec": 0,
+            "skipped_tests": 0
+          },
+          "c:\\Projects\\cnp_v1_starter_kit\\gateway\\app\\models\\schemas.py": {
+            "CONFIDENCE.HIGH": 0,
+            "CONFIDENCE.LOW": 0,
+            "CONFIDENCE.MEDIUM": 0,
+            "CONFIDENCE.UNDEFINED": 0,
+            "SEVERITY.HIGH": 0,
+            "SEVERITY.LOW": 0,
+            "SEVERITY.MEDIUM": 0,
+            "SEVERITY.UNDEFINED": 0,
+            "loc": 37,
+            "nosec": 0,
+            "skipped_tests": 0
+          },
+          "c:\\Projects\\cnp_v1_starter_kit\\gateway\\tests\\test_api.py": {
+            "CONFIDENCE.HIGH": 2,
+            "CONFIDENCE.LOW": 0,
+            "CONFIDENCE.MEDIUM": 0,
+            "CONFIDENCE.UNDEFINED": 0,
+            "SEVERITY.HIGH": 0,
+            "SEVERITY.LOW": 2,
+            "SEVERITY.MEDIUM": 0,
+            "SEVERITY.UNDEFINED": 0,
+            "loc": 8,
+            "nosec": 0,
+            "skipped_tests": 0
+          }
+        },
+        "results": [
+          {
+            "code": "9     response = client.get(\"/api/health\")\n10     assert response.status_code == 200\n11     assert response.json()[\"status\"] == \"ok\"\n",
+            "col_offset": 4,
+            "end_col_offset": 38,
+            "filename": "c:\\Projects\\cnp_v1_starter_kit\\gateway\\tests\\test_api.py",
+            "issue_confidence": "HIGH",
+            "issue_cwe": {
+              "id": 703,
+              "link": "https://cwe.mitre.org/data/definitions/703.html"
+            },
+            "issue_severity": "LOW",
+            "issue_text": "Use of assert detected. The enclosed code will be removed when compiling to optimised byte code.",
+            "line_number": 10,
+            "line_range": [
+              10
+            ],
+            "more_info": "https://bandit.readthedocs.io/en/1.9.4/plugins/b101_assert_used.html",
+            "test_id": "B101",
+            "test_name": "assert_used"
+          },
+          {
+            "code": "10     assert response.status_code == 200\n11     assert response.json()[\"status\"] == \"ok\"\n",
+            "col_offset": 4,
+            "end_col_offset": 44,
+            "filename": "c:\\Projects\\cnp_v1_starter_kit\\gateway\\tests\\test_api.py",
+            "issue_confidence": "HIGH",
+            "issue_cwe": {
+              "id": 703,
+              "link": "https://cwe.mitre.org/data/definitions/703.html"
+            },
+            "issue_severity": "LOW",
+            "issue_text": "Use of assert detected. The enclosed code will be removed when compiling to optimised byte code.",
+            "line_number": 11,
+            "line_range": [
+              11
+            ],
+            "more_info": "https://bandit.readthedocs.io/en/1.9.4/plugins/b101_assert_used.html",
+            "test_id": "B101",
+            "test_name": "assert_used"
+          }
+        ]
+      }
+    },
+    "complexity": [
+      {
+        "file": "c:\\Projects\\cnp_v1_starter_kit\\gateway\\app\\__init__.py",
+        "functions": []
+      },
+      {
+        "file": "c:\\Projects\\cnp_v1_starter_kit\\gateway\\app\\api\\__init__.py",
+        "functions": []
+      },
+      {
+        "file": "c:\\Projects\\cnp_v1_starter_kit\\gateway\\app\\api\\routes.py",
+        "functions": [
+          {
+            "ccn": 1,
+            "line": 15,
+            "name": "get_bridge",
+            "path": "c:\\Projects\\cnp_v1_starter_kit\\gateway\\app\\api\\routes.py"
+          }
+        ]
+      },
+      {
+        "file": "c:\\Projects\\cnp_v1_starter_kit\\gateway\\app\\core\\__init__.py",
+        "functions": []
+      },
+      {
+        "file": "c:\\Projects\\cnp_v1_starter_kit\\gateway\\app\\core\\config.py",
+        "functions": []
+      },
+      {
+        "file": "c:\\Projects\\cnp_v1_starter_kit\\gateway\\app\\core\\db.py",
+        "functions": []
+      },
+      {
+        "file": "c:\\Projects\\cnp_v1_starter_kit\\gateway\\app\\core\\mqtt_client.py",
+        "functions": [
+          {
+            "ccn": 1,
+            "line": 15,
+            "name": "__init__",
+            "path": "c:\\Projects\\cnp_v1_starter_kit\\gateway\\app\\core\\mqtt_client.py"
+          }
+        ]
+      },
+      {
+        "file": "c:\\Projects\\cnp_v1_starter_kit\\gateway\\app\\core\\registry.py",
+        "functions": []
+      },
+      {
+        "file": "c:\\Projects\\cnp_v1_starter_kit\\gateway\\app\\core\\storage.py",
+        "functions": []
+      },
+      {
+        "file": "c:\\Projects\\cnp_v1_starter_kit\\gateway\\app\\main.py",
+        "functions": []
+      },
+      {
+        "file": "c:\\Projects\\cnp_v1_starter_kit\\gateway\\app\\models\\__init__.py",
+        "functions": []
+      },
+      {
+        "file": "c:\\Projects\\cnp_v1_starter_kit\\gateway\\app\\models\\schemas.py",
+        "functions": [
+          {
+            "ccn": 1,
+            "line": 35,
+            "name": "ensure_datetime",
+            "path": "c:\\Projects\\cnp_v1_starter_kit\\gateway\\app\\models\\schemas.py"
+          }
+        ]
+      },
+      {
+        "file": "c:\\Projects\\cnp_v1_starter_kit\\gateway\\tests\\test_api.py",
+        "functions": [
+          {
+            "ccn": 1,
+            "line": 7,
+            "name": "test_health",
+            "path": "c:\\Projects\\cnp_v1_starter_kit\\gateway\\tests\\test_api.py"
+          }
+        ]
+      }
+    ],
+    "coverage": {
+      "coverage_json_exit_code": 1,
+      "coverage_json_output": "No data to report.\n",
+      "pytest_exit_code": 4,
+      "pytest_output": "\nno tests ran in 0.01s\nERROR: file or directory not found: gateway/tests\n\nC:\\Users\\Ava\\AppData\\Local\\Packages\\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\\LocalCache\\local-packages\\Python313\\site-packages\\coverage\\control.py:958: CoverageWarning: No data was collected. (no-data-collected); see https://coverage.readthedocs.io/en/7.13.5/messages.html#warning-no-data-collected\n  self._warn(\"No data was collected.\", slug=\"no-data-collected\")\n"
+    },
+    "duplication": {
+      "duplication_pct": 26.288659793814436,
+      "total_lines": 388
+    }
+  }
+}

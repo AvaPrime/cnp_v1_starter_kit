@@ -1,0 +1,803 @@
+{
+  "files": {
+    "database": {
+      "tables": {
+        "commands": [
+          "id",
+          "command_id",
+          "node_id",
+          "command_type",
+          "category",
+          "params_json",
+          "status",
+          "issued_at",
+          "ack_at",
+          "detail"
+        ],
+        "errors": [
+          "id",
+          "node_id",
+          "error_code",
+          "error_msg",
+          "recoverable",
+          "received_at"
+        ],
+        "events": [
+          "id",
+          "event_id",
+          "node_id",
+          "event_type",
+          "category",
+          "priority",
+          "data_json",
+          "timestamp",
+          "received_at"
+        ],
+        "heartbeats": [
+          "id",
+          "node_id",
+          "status",
+          "uptime_sec",
+          "battery",
+          "wifi_rssi",
+          "received_at"
+        ],
+        "node_config": [
+          "node_id",
+          "heartbeat_interval_sec",
+          "report_interval_sec",
+          "permissions_json",
+          "custom_json",
+          "updated_at"
+        ],
+        "nodes": [
+          "node_id",
+          "node_name",
+          "node_type",
+          "zone",
+          "protocol_version",
+          "firmware_version",
+          "capabilities_json",
+          "status",
+          "battery",
+          "wifi_rssi",
+          "uptime_sec",
+          "last_seen",
+          "registered_at",
+          "notes"
+        ]
+      },
+      "triggers": [
+        "trim_heartbeats"
+      ],
+      "views": {
+        "v_event_summary": "SELECT\n    node_id,\n    category,\n    COUNT(*) AS event_count,\n    MAX(timestamp) AS last_event\nFROM events\nWHERE timestamp >= datetime('now', '-24 hours')\nGROUP BY node_id, category",
+        "v_node_status": "SELECT\n    n.node_id,\n    n.node_name,\n    n.node_type,\n    n.zone,\n    n.status,\n    n.battery,\n    n.wifi_rssi,\n    n.last_seen,\n    CAST((julianday('now') - julianday(n.last_seen)) * 86400 AS INTEGER) AS seconds_since_seen,\n    n.firmware_version\nFROM nodes n",
+        "v_pending_commands": "SELECT\n    c.command_id,\n    c.node_id,\n    c.command_type,\n    c.category,\n    c.params_json,\n    c.issued_at\nFROM commands c\nWHERE c.status = 'pending'\nORDER BY c.issued_at ASC",
+        "v_recent_alerts": "SELECT\n    e.event_id,\n    e.node_id,\n    n.node_name,\n    n.zone,\n    e.event_type,\n    e.priority,\n    e.data_json,\n    e.timestamp\nFROM events e\nJOIN nodes n ON e.node_id = n.node_id\nWHERE e.priority IN ('high','critical')\n  AND e.timestamp >= datetime('now', '-24 hours')\nORDER BY e.timestamp DESC"
+      }
+    },
+    "firmware": {
+      "entrypoint": "c:\\Projects\\files\\cnp_node_skeleton.ino",
+      "style": "Arduino sketch"
+    },
+    "gateway": {
+      "endpoints": [
+        {
+          "method": "POST",
+          "path": "/api/node/hello",
+          "source": "c:\\Projects\\files\\gateway.py"
+        },
+        {
+          "method": "POST",
+          "path": "/api/node/heartbeat",
+          "source": "c:\\Projects\\files\\gateway.py"
+        },
+        {
+          "method": "POST",
+          "path": "/api/node/event",
+          "source": "c:\\Projects\\files\\gateway.py"
+        },
+        {
+          "method": "POST",
+          "path": "/api/node/state",
+          "source": "c:\\Projects\\files\\gateway.py"
+        },
+        {
+          "method": "POST",
+          "path": "/api/node/error",
+          "source": "c:\\Projects\\files\\gateway.py"
+        },
+        {
+          "method": "POST",
+          "path": "/api/node/command_result",
+          "source": "c:\\Projects\\files\\gateway.py"
+        },
+        {
+          "method": "GET",
+          "path": "/api/node/commands/{node_id}",
+          "source": "c:\\Projects\\files\\gateway.py"
+        },
+        {
+          "method": "GET",
+          "path": "/api/nodes",
+          "source": "c:\\Projects\\files\\gateway.py"
+        },
+        {
+          "method": "GET",
+          "path": "/api/nodes/{node_id}",
+          "source": "c:\\Projects\\files\\gateway.py"
+        },
+        {
+          "method": "GET",
+          "path": "/api/events",
+          "source": "c:\\Projects\\files\\gateway.py"
+        },
+        {
+          "method": "GET",
+          "path": "/api/alerts",
+          "source": "c:\\Projects\\files\\gateway.py"
+        },
+        {
+          "method": "POST",
+          "path": "/api/commands",
+          "source": "c:\\Projects\\files\\gateway.py"
+        },
+        {
+          "method": "PATCH",
+          "path": "/api/nodes/{node_id}/config",
+          "source": "c:\\Projects\\files\\gateway.py"
+        },
+        {
+          "method": "GET",
+          "path": "/health",
+          "source": "c:\\Projects\\files\\gateway.py"
+        }
+      ],
+      "entrypoint": "c:\\Projects\\files\\gateway.py",
+      "framework": "FastAPI",
+      "integrations": [
+        "Memory Cortex bridge hook (placeholder)",
+        "HTTP bearer token via X-CNP-Token (static allow-list)"
+      ]
+    },
+    "schemas": {
+      "cnp_v1_schemas.json": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "definitions": {
+          "command": {
+            "allOf": [
+              {
+                "$ref": "#/definitions/message_envelope"
+              }
+            ],
+            "description": "Gateway \u2192 node command",
+            "properties": {
+              "message_type": {
+                "const": "command"
+              },
+              "payload": {
+                "properties": {
+                  "category": {
+                    "enum": [
+                      "control",
+                      "configuration",
+                      "maintenance",
+                      "power"
+                    ],
+                    "type": "string"
+                  },
+                  "command_id": {
+                    "type": "string"
+                  },
+                  "command_type": {
+                    "type": "string"
+                  },
+                  "params": {
+                    "type": "object"
+                  },
+                  "timeout_ms": {
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "command_id",
+                  "command_type",
+                  "category"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "command_result": {
+            "allOf": [
+              {
+                "$ref": "#/definitions/message_envelope"
+              }
+            ],
+            "description": "Acknowledgment sent after executing a command",
+            "properties": {
+              "message_type": {
+                "const": "command_result"
+              },
+              "payload": {
+                "properties": {
+                  "command_id": {
+                    "type": "string"
+                  },
+                  "detail": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "enum": [
+                      "executed",
+                      "failed",
+                      "rejected",
+                      "queued"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "command_id",
+                  "status"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "error": {
+            "allOf": [
+              {
+                "$ref": "#/definitions/message_envelope"
+              }
+            ],
+            "description": "Node-side error report",
+            "properties": {
+              "message_type": {
+                "const": "error"
+              },
+              "payload": {
+                "properties": {
+                  "error_code": {
+                    "type": "string"
+                  },
+                  "error_msg": {
+                    "type": "string"
+                  },
+                  "recoverable": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "error_code",
+                  "error_msg"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "event": {
+            "allOf": [
+              {
+                "$ref": "#/definitions/message_envelope"
+              }
+            ],
+            "description": "Something meaningful happened",
+            "properties": {
+              "message_type": {
+                "const": "event"
+              },
+              "payload": {
+                "properties": {
+                  "category": {
+                    "enum": [
+                      "telemetry",
+                      "alert",
+                      "interaction",
+                      "system",
+                      "security",
+                      "power"
+                    ],
+                    "type": "string"
+                  },
+                  "data": {
+                    "type": "object"
+                  },
+                  "event_id": {
+                    "type": "string"
+                  },
+                  "event_type": {
+                    "type": "string"
+                  },
+                  "priority": {
+                    "enum": [
+                      "low",
+                      "normal",
+                      "high",
+                      "critical"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "event_id",
+                  "event_type",
+                  "category",
+                  "priority",
+                  "data"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "heartbeat": {
+            "allOf": [
+              {
+                "$ref": "#/definitions/message_envelope"
+              }
+            ],
+            "description": "Sent periodically to confirm node is alive",
+            "properties": {
+              "message_type": {
+                "const": "heartbeat"
+              },
+              "payload": {
+                "properties": {
+                  "battery": {
+                    "maximum": 100,
+                    "minimum": 0,
+                    "type": "number"
+                  },
+                  "status": {
+                    "enum": [
+                      "online",
+                      "degraded"
+                    ],
+                    "type": "string"
+                  },
+                  "uptime_sec": {
+                    "type": "integer"
+                  },
+                  "wifi_rssi": {
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "status",
+                  "uptime_sec"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "hello": {
+            "allOf": [
+              {
+                "$ref": "#/definitions/message_envelope"
+              }
+            ],
+            "description": "Sent once on boot \u2014 announces identity and capabilities",
+            "properties": {
+              "message_type": {
+                "const": "hello"
+              },
+              "payload": {
+                "properties": {
+                  "capabilities": {
+                    "properties": {
+                      "actuators": {
+                        "items": {
+                          "type": "string"
+                        },
+                        "type": "array"
+                      },
+                      "connectivity": {
+                        "items": {
+                          "type": "string"
+                        },
+                        "type": "array"
+                      },
+                      "power_mode": {
+                        "enum": [
+                          "usb",
+                          "battery",
+                          "solar"
+                        ],
+                        "type": "string"
+                      },
+                      "sensors": {
+                        "items": {
+                          "type": "string"
+                        },
+                        "type": "array"
+                      }
+                    },
+                    "type": "object"
+                  },
+                  "firmware_version": {
+                    "type": "string"
+                  },
+                  "node_name": {
+                    "type": "string"
+                  },
+                  "node_type": {
+                    "enum": [
+                      "sensor",
+                      "actuator",
+                      "hybrid",
+                      "gateway"
+                    ],
+                    "type": "string"
+                  },
+                  "zone": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "node_name",
+                  "node_type",
+                  "zone",
+                  "firmware_version",
+                  "capabilities"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "message_envelope": {
+            "description": "Universal wrapper for every CNP message",
+            "properties": {
+              "message_type": {
+                "enum": [
+                  "hello",
+                  "heartbeat",
+                  "state_update",
+                  "event",
+                  "command_result",
+                  "error",
+                  "register_ack",
+                  "config_update",
+                  "command",
+                  "ping",
+                  "reboot",
+                  "sleep"
+                ],
+                "type": "string"
+              },
+              "node_id": {
+                "pattern": "^cnp-[a-z0-9]+-[a-z0-9]+-[0-9]{2}$",
+                "type": "string"
+              },
+              "payload": {
+                "type": "object"
+              },
+              "protocol": {
+                "const": "CNPv1",
+                "type": "string"
+              },
+              "timestamp": {
+                "format": "date-time",
+                "type": "string"
+              }
+            },
+            "required": [
+              "protocol",
+              "message_type",
+              "node_id",
+              "timestamp",
+              "payload"
+            ],
+            "type": "object"
+          },
+          "register_ack": {
+            "allOf": [
+              {
+                "$ref": "#/definitions/message_envelope"
+              }
+            ],
+            "description": "Gateway confirms successful node registration",
+            "properties": {
+              "message_type": {
+                "const": "register_ack"
+              },
+              "payload": {
+                "properties": {
+                  "config": {
+                    "properties": {
+                      "heartbeat_interval_sec": {
+                        "default": 30,
+                        "type": "integer"
+                      },
+                      "permissions": {
+                        "items": {
+                          "type": "string"
+                        },
+                        "type": "array"
+                      },
+                      "report_interval_sec": {
+                        "default": 60,
+                        "type": "integer"
+                      },
+                      "zone": {
+                        "type": "string"
+                      }
+                    },
+                    "type": "object"
+                  },
+                  "registered": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "registered",
+                  "config"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "state_update": {
+            "allOf": [
+              {
+                "$ref": "#/definitions/message_envelope"
+              }
+            ],
+            "description": "Full state snapshot of the node",
+            "properties": {
+              "message_type": {
+                "const": "state_update"
+              },
+              "payload": {
+                "properties": {
+                  "battery": {
+                    "type": "number"
+                  },
+                  "errors": {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "last_seen": {
+                    "format": "date-time",
+                    "type": "string"
+                  },
+                  "status": {
+                    "enum": [
+                      "online",
+                      "offline",
+                      "degraded"
+                    ],
+                    "type": "string"
+                  },
+                  "uptime_sec": {
+                    "type": "integer"
+                  },
+                  "wifi_rssi": {
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "status"
+                ],
+                "type": "object"
+              }
+            }
+          }
+        },
+        "examples": {
+          "command_relay": {
+            "message_type": "command",
+            "node_id": "cnp-lab-relay-01",
+            "payload": {
+              "category": "control",
+              "command_id": "cmd-000001",
+              "command_type": "set_relay",
+              "params": {
+                "state": "on"
+              },
+              "timeout_ms": 5000
+            },
+            "protocol": "CNPv1",
+            "timestamp": "2026-03-18T10:07:00Z"
+          },
+          "event_alert": {
+            "message_type": "event",
+            "node_id": "cnp-entry-motion-01",
+            "payload": {
+              "category": "alert",
+              "data": {
+                "motion": true
+              },
+              "event_id": "evt-000002",
+              "event_type": "motion_detected",
+              "priority": "high"
+            },
+            "protocol": "CNPv1",
+            "timestamp": "2026-03-18T10:06:00Z"
+          },
+          "event_telemetry": {
+            "message_type": "event",
+            "node_id": "cnp-office-temp-01",
+            "payload": {
+              "category": "telemetry",
+              "data": {
+                "humidity_pct": 61,
+                "temperature_c": 27.4
+              },
+              "event_id": "evt-000001",
+              "event_type": "temperature_reading",
+              "priority": "normal"
+            },
+            "protocol": "CNPv1",
+            "timestamp": "2026-03-18T10:05:00Z"
+          },
+          "hello": {
+            "message_type": "hello",
+            "node_id": "cnp-office-temp-01",
+            "payload": {
+              "capabilities": {
+                "actuators": [],
+                "connectivity": [
+                  "wifi"
+                ],
+                "power_mode": "usb",
+                "sensors": [
+                  "temperature",
+                  "humidity"
+                ]
+              },
+              "firmware_version": "1.0.0",
+              "node_name": "Office Climate Node",
+              "node_type": "sensor",
+              "zone": "office"
+            },
+            "protocol": "CNPv1",
+            "timestamp": "2026-03-18T10:00:00Z"
+          }
+        },
+        "title": "Codessa Node Protocol v1 \u2014 Message Schemas",
+        "version": "CNPv1"
+      }
+    }
+  },
+  "prod": {
+    "database": {
+      "tables": {
+        "acks": [
+          "id",
+          "message_id",
+          "node_id",
+          "ack_type",
+          "target_message_id",
+          "result",
+          "reason",
+          "ts_utc"
+        ],
+        "commands": [
+          "command_id",
+          "node_id",
+          "command_type",
+          "category",
+          "issued_by",
+          "issued_ts_utc",
+          "status",
+          "timeout_ms",
+          "arguments_json",
+          "result_code",
+          "result_details_json",
+          "completed_ts_utc"
+        ],
+        "errors": [
+          "id",
+          "message_id",
+          "node_id",
+          "ts_utc",
+          "severity",
+          "domain",
+          "code",
+          "message",
+          "recoverable",
+          "diagnostics_json"
+        ],
+        "events": [
+          "id",
+          "message_id",
+          "node_id",
+          "ts_utc",
+          "category",
+          "event_type",
+          "priority",
+          "requires_ack",
+          "body_json"
+        ],
+        "nodes": [
+          "node_id",
+          "device_uid",
+          "node_name",
+          "node_type",
+          "protocol_version",
+          "firmware_version",
+          "hardware_model",
+          "capabilities_json",
+          "config_version",
+          "status",
+          "last_seen_utc",
+          "first_seen_utc",
+          "boot_reason",
+          "heartbeat_interval_sec",
+          "offline_after_sec",
+          "last_rssi",
+          "battery_pct",
+          "free_heap_bytes",
+          "queue_depth",
+          "supports_ota",
+          "ota_channel",
+          "ota_last_result",
+          "tags_json",
+          "metadata_json"
+        ]
+      },
+      "triggers": [],
+      "views": {}
+    },
+    "dependencies": {
+      "python": [
+        "fastapi==0.116.1",
+        "uvicorn[standard]==0.35.0",
+        "pydantic==2.11.7",
+        "aiosqlite==0.21.0",
+        "asyncio-mqtt==0.16.2",
+        "orjson==3.11.1",
+        "httpx==0.28.1",
+        "pytest==8.4.1",
+        "pytest-asyncio==1.1.0"
+      ]
+    },
+    "firmware": {
+      "platformio": "c:\\Projects\\cnp_v1_starter_kit\\firmware\\platformio.ini",
+      "style": "PlatformIO C++"
+    },
+    "gateway": {
+      "endpoints": [
+        {
+          "method": "GET",
+          "path": "/api/health",
+          "source": "c:\\Projects\\cnp_v1_starter_kit\\gateway\\app\\api\\routes.py"
+        },
+        {
+          "method": "GET",
+          "path": "/api/nodes",
+          "source": "c:\\Projects\\cnp_v1_starter_kit\\gateway\\app\\api\\routes.py"
+        },
+        {
+          "method": "GET",
+          "path": "/api/nodes/{node_id}",
+          "source": "c:\\Projects\\cnp_v1_starter_kit\\gateway\\app\\api\\routes.py"
+        },
+        {
+          "method": "POST",
+          "path": "/api/nodes/{node_id}/commands",
+          "source": "c:\\Projects\\cnp_v1_starter_kit\\gateway\\app\\api\\routes.py"
+        }
+      ],
+      "entrypoint": "c:\\Projects\\cnp_v1_starter_kit\\gateway\\app\\main.py",
+      "framework": "FastAPI",
+      "integrations": [
+        "Mosquitto allow_anonymous=true (dev convenience)"
+      ],
+      "routes": "c:\\Projects\\cnp_v1_starter_kit\\gateway\\app\\api\\routes.py"
+    },
+    "mqtt": {
+      "config": {
+        "mosquitto.conf": "listener 1883\nallow_anonymous true\npersistence true\npersistence_location /tmp/mosquitto/"
+      },
+      "topics": [
+        "cnp/v1/nodes/+/+",
+        "cnp/v1/nodes/{node_id}/ack",
+        "cnp/v1/nodes/{node_id}/cmd/in"
+      ]
+    }
+  }
+}

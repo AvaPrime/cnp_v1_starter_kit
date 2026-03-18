@@ -1,0 +1,92 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>CNP Comparative Performance Dashboard</title>
+  <style>
+    body { font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial; margin: 16px; }
+    table { border-collapse: collapse; width: 100%; }
+    th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+    th { background: #f6f6f6; }
+    .kpi { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-bottom: 12px; }
+    .card { border: 1px solid #ddd; padding: 10px; border-radius: 6px; }
+    .muted { color: #555; font-size: 12px; }
+  </style>
+</head>
+<body>
+  <h1>CNP Comparative Performance Dashboard</h1>
+  <div class="muted">Source: performance_summary.csv (embedded)</div>
+  <div id="kpis" class="kpi"></div>
+  <h2>Summary</h2>
+  <table id="tbl"></table>
+  <script>
+    const csv = `system_id,system_label,test_name,path,concurrency,duration_s,requests_total,requests_ok,errors,error_kinds_json,error_rate,rps,latency_p50_ms,latency_p95_ms,latency_p99_ms,latency_mean_ms,latency_min_ms,latency_max_ms,proc_cpu_p95,proc_rss_p95_bytes
+files,c:\\Projects\\files,health,/health,25,10.0,112,62,50,"{""ReadTimeout"": 50}",0.44642857142857145,9.874332804777303,153.78039999995963,236.71452999983555,299.88991700015504,159.66008064512403,63.60599999970873,304.8372000002928,0.31000000000000444,52588544.0
+files,c:\\Projects\\files,nodes,/api/nodes,10,10.0,10,0,10,"{""ReadTimeout"": 10}",1.0,0.6342299967093853,nan,nan,nan,nan,nan,nan,0.0,52588544.0
+prod,c:\\Projects\\cnp_v1_starter_kit,health,/api/health,25,10.0,107,57,50,"{""ReadTimeout"": 50}",0.4672897196261682,9.29145605200767,160.26379999948404,402.115919999778,464.76036000036396,204.42207543859885,77.14049999958661,475.6195999998454,3.2450000000000023,54919168.0
+prod,c:\\Projects\\cnp_v1_starter_kit,nodes,/api/nodes,10,10.0,10,0,10,"{""ReadTimeout"": 10}",1.0,0.6453192519854187,nan,nan,nan,nan,nan,nan,0.0,54919168.0
+`;
+    const lines = csv.trim().split(/\r?\n/);
+    const headers = lines[0].split(",");
+    const rows = lines.slice(1).map(l => {
+      const cols = l.split(",");
+      const obj = {};
+      headers.forEach((h, i) => obj[h] = cols[i]);
+      return obj;
+    });
+
+    function num(x) {
+      const v = Number(x);
+      return Number.isFinite(v) ? v : null;
+    }
+
+    const tbl = document.getElementById("tbl");
+    const thead = document.createElement("thead");
+    const trh = document.createElement("tr");
+    headers.forEach(h => {
+      const th = document.createElement("th");
+      th.textContent = h;
+      trh.appendChild(th);
+    });
+    thead.appendChild(trh);
+    tbl.appendChild(thead);
+    const tbody = document.createElement("tbody");
+    rows.forEach(r => {
+      const tr = document.createElement("tr");
+      headers.forEach(h => {
+        const td = document.createElement("td");
+        td.textContent = r[h];
+        tr.appendChild(td);
+      });
+      tbody.appendChild(tr);
+    });
+    tbl.appendChild(tbody);
+
+    const bySys = {};
+    rows.forEach(r => {
+      const k = r.system_id;
+      bySys[k] ??= [];
+      bySys[k].push(r);
+    });
+    const kpis = document.getElementById("kpis");
+    Object.keys(bySys).forEach(sysId => {
+      const sysRows = bySys[sysId];
+      const p95s = sysRows.map(r => num(r.latency_p95_ms)).filter(v => v !== null);
+      const rpss = sysRows.map(r => num(r.rps)).filter(v => v !== null);
+      const errRates = sysRows.map(r => num(r.error_rate)).filter(v => v !== null);
+      const rss = sysRows.map(r => num(r.proc_rss_p95_bytes)).filter(v => v !== null);
+      const card = document.createElement("div");
+      card.className = "card";
+      const mean = arr => arr.length ? arr.reduce((a,b)=>a+b,0)/arr.length : null;
+      card.innerHTML = `
+        <div><strong>${sysId}</strong></div>
+        <div class="muted">Avg p95 latency (ms): ${mean(p95s)?.toFixed(2) ?? "n/a"}</div>
+        <div class="muted">Avg throughput (rps): ${mean(rpss)?.toFixed(2) ?? "n/a"}</div>
+        <div class="muted">Avg error rate: ${mean(errRates)?.toFixed(4) ?? "n/a"}</div>
+        <div class="muted">Avg p95 RSS (MB): ${mean(rss) ? (mean(rss)/1024/1024).toFixed(1) : "n/a"}</div>
+      `;
+      kpis.appendChild(card);
+    });
+  </script>
+</body>
+</html>

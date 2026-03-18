@@ -1,0 +1,63 @@
+We renamed asyncio-mqtt to aiomqtt and released a version 1.0.0 in the process. This is the last release under the asyncio-mqtt name. You can find the new repository at https://github.com/sbtinstruments/aiomqtt
+INFO:     Started server process [18472]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:8080 (Press CTRL+C to quit)
+INFO:     127.0.0.1:55235 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55238 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55239 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55240 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55241 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55242 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55243 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55244 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55245 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55246 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55247 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55248 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55249 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55250 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55251 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55252 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55253 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55254 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55255 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55256 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55257 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55258 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55259 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55260 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55261 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55262 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55243 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55244 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55245 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55243 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55246 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55247 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55244 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55245 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55243 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55246 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55244 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55245 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55243 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55247 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55246 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55248 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55244 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55243 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55245 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55246 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55248 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55243 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55247 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55245 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55244 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55246 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55249 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55248 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55247 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55243 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55244 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55245 - "GET /api/health HTTP/1.1" 200 OK

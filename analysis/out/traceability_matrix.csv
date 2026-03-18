@@ -1,0 +1,28 @@
+item_type,item,files_present,prod_present,parity,implementation_notes
+api_endpoint,GET /api/alerts,yes,no,degraded,
+api_endpoint,GET /api/events,yes,no,degraded,
+api_endpoint,GET /api/health,no,yes,enhanced,
+api_endpoint,GET /api/node/commands/{node_id},yes,no,degraded,
+api_endpoint,GET /api/nodes,yes,yes,identical,
+api_endpoint,GET /api/nodes/{node_id},yes,yes,identical,
+api_endpoint,GET /health,yes,no,degraded,
+api_endpoint,PATCH /api/nodes/{node_id}/config,yes,no,degraded,
+api_endpoint,POST /api/commands,yes,no,degraded,
+api_endpoint,POST /api/node/command_result,yes,no,degraded,
+api_endpoint,POST /api/node/error,yes,no,degraded,
+api_endpoint,POST /api/node/event,yes,no,degraded,
+api_endpoint,POST /api/node/heartbeat,yes,no,degraded,
+api_endpoint,POST /api/node/hello,yes,no,degraded,
+api_endpoint,POST /api/node/state,yes,no,degraded,
+api_endpoint,POST /api/nodes/{node_id}/commands,no,yes,enhanced,
+capability_user,Node registration,yes,yes,degraded,HTTP /api/node/hello
+capability_user,Heartbeat ingest,yes,yes,degraded,HTTP /api/node/heartbeat
+capability_user,Event ingest,yes,yes,degraded,HTTP /api/node/event
+capability_user,Error ingest,yes,yes,degraded,HTTP /api/node/error
+capability_admin,List nodes,yes,yes,identical,GET /api/nodes
+capability_admin,Get node detail,yes,yes,identical,GET /api/nodes/{node_id}
+capability_admin,Issue command,yes,yes,identical,POST /api/commands vs POST /api/nodes/{node_id}/commands
+capability_admin,Update node config,yes,no,missing,PATCH /api/nodes/{node_id}/config
+capability_admin,Recent alerts,yes,no,missing,GET /api/alerts
+capability_user,Command round-trip,yes,yes,degraded,polling vs MQTT command topics
+capability_user,Offline detection,yes,yes,identical,offline_watcher updates node status

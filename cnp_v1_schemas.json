@@ -1,0 +1,245 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Codessa Node Protocol v1 — Message Schemas",
+  "version": "CNPv1",
+
+  "definitions": {
+
+    "message_envelope": {
+      "description": "Universal wrapper for every CNP message",
+      "type": "object",
+      "required": ["protocol", "message_type", "node_id", "timestamp", "payload"],
+      "properties": {
+        "protocol":     { "type": "string", "const": "CNPv1" },
+        "message_type": { "type": "string", "enum": ["hello","heartbeat","state_update","event","command_result","error","register_ack","config_update","command","ping","reboot","sleep"] },
+        "node_id":      { "type": "string", "pattern": "^cnp-[a-z0-9]+-[a-z0-9]+-[0-9]{2}$" },
+        "timestamp":    { "type": "string", "format": "date-time" },
+        "payload":      { "type": "object" }
+      }
+    },
+
+    "hello": {
+      "description": "Sent once on boot — announces identity and capabilities",
+      "allOf": [{ "$ref": "#/definitions/message_envelope" }],
+      "properties": {
+        "message_type": { "const": "hello" },
+        "payload": {
+          "type": "object",
+          "required": ["node_name","node_type","zone","firmware_version","capabilities"],
+          "properties": {
+            "node_name":        { "type": "string" },
+            "node_type":        { "type": "string", "enum": ["sensor","actuator","hybrid","gateway"] },
+            "zone":             { "type": "string" },
+            "firmware_version": { "type": "string" },
+            "capabilities": {
+              "type": "object",
+              "properties": {
+                "sensors":      { "type": "array", "items": { "type": "string" } },
+                "actuators":    { "type": "array", "items": { "type": "string" } },
+                "connectivity": { "type": "array", "items": { "type": "string" } },
+                "power_mode":   { "type": "string", "enum": ["usb","battery","solar"] }
+              }
+            }
+          }
+        }
+      }
+    },
+
+    "heartbeat": {
+      "description": "Sent periodically to confirm node is alive",
+      "allOf": [{ "$ref": "#/definitions/message_envelope" }],
+      "properties": {
+        "message_type": { "const": "heartbeat" },
+        "payload": {
+          "type": "object",
+          "required": ["status","uptime_sec"],
+          "properties": {
+            "status":     { "type": "string", "enum": ["online","degraded"] },
+            "uptime_sec": { "type": "integer" },
+            "battery":    { "type": "number", "minimum": 0, "maximum": 100 },
+            "wifi_rssi":  { "type": "integer" }
+          }
+        }
+      }
+    },
+
+    "state_update": {
+      "description": "Full state snapshot of the node",
+      "allOf": [{ "$ref": "#/definitions/message_envelope" }],
+      "properties": {
+        "message_type": { "const": "state_update" },
+        "payload": {
+          "type": "object",
+          "required": ["status"],
+          "properties": {
+            "status":     { "type": "string", "enum": ["online","offline","degraded"] },
+            "battery":    { "type": "number" },
+            "wifi_rssi":  { "type": "integer" },
+            "uptime_sec": { "type": "integer" },
+            "last_seen":  { "type": "string", "format": "date-time" },
+            "errors":     { "type": "array", "items": { "type": "string" } }
+          }
+        }
+      }
+    },
+
+    "event": {
+      "description": "Something meaningful happened",
+      "allOf": [{ "$ref": "#/definitions/message_envelope" }],
+      "properties": {
+        "message_type": { "const": "event" },
+        "payload": {
+          "type": "object",
+          "required": ["event_id","event_type","category","priority","data"],
+          "properties": {
+            "event_id":   { "type": "string" },
+            "event_type": { "type": "string" },
+            "category":   { "type": "string", "enum": ["telemetry","alert","interaction","system","security","power"] },
+            "priority":   { "type": "string", "enum": ["low","normal","high","critical"] },
+            "data":       { "type": "object" }
+          }
+        }
+      }
+    },
+
+    "command_result": {
+      "description": "Acknowledgment sent after executing a command",
+      "allOf": [{ "$ref": "#/definitions/message_envelope" }],
+      "properties": {
+        "message_type": { "const": "command_result" },
+        "payload": {
+          "type": "object",
+          "required": ["command_id","status"],
+          "properties": {
+            "command_id": { "type": "string" },
+            "status":     { "type": "string", "enum": ["executed","failed","rejected","queued"] },
+            "detail":     { "type": "string" }
+          }
+        }
+      }
+    },
+
+    "error": {
+      "description": "Node-side error report",
+      "allOf": [{ "$ref": "#/definitions/message_envelope" }],
+      "properties": {
+        "message_type": { "const": "error" },
+        "payload": {
+          "type": "object",
+          "required": ["error_code","error_msg"],
+          "properties": {
+            "error_code": { "type": "string" },
+            "error_msg":  { "type": "string" },
+            "recoverable":{ "type": "boolean" }
+          }
+        }
+      }
+    },
+
+    "command": {
+      "description": "Gateway → node command",
+      "allOf": [{ "$ref": "#/definitions/message_envelope" }],
+      "properties": {
+        "message_type": { "const": "command" },
+        "payload": {
+          "type": "object",
+          "required": ["command_id","command_type","category"],
+          "properties": {
+            "command_id":   { "type": "string" },
+            "command_type": { "type": "string" },
+            "category":     { "type": "string", "enum": ["control","configuration","maintenance","power"] },
+            "params":       { "type": "object" },
+            "timeout_ms":   { "type": "integer" }
+          }
+        }
+      }
+    },
+
+    "register_ack": {
+      "description": "Gateway confirms successful node registration",
+      "allOf": [{ "$ref": "#/definitions/message_envelope" }],
+      "properties": {
+        "message_type": { "const": "register_ack" },
+        "payload": {
+          "type": "object",
+          "required": ["registered","config"],
+          "properties": {
+            "registered":       { "type": "boolean" },
+            "config": {
+              "type": "object",
+              "properties": {
+                "heartbeat_interval_sec": { "type": "integer", "default": 30 },
+                "report_interval_sec":    { "type": "integer", "default": 60 },
+                "zone":                   { "type": "string" },
+                "permissions":            { "type": "array", "items": { "type": "string" } }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+
+  "examples": {
+    "hello": {
+      "protocol": "CNPv1",
+      "message_type": "hello",
+      "node_id": "cnp-office-temp-01",
+      "timestamp": "2026-03-18T10:00:00Z",
+      "payload": {
+        "node_name": "Office Climate Node",
+        "node_type": "sensor",
+        "zone": "office",
+        "firmware_version": "1.0.0",
+        "capabilities": {
+          "sensors": ["temperature","humidity"],
+          "actuators": [],
+          "connectivity": ["wifi"],
+          "power_mode": "usb"
+        }
+      }
+    },
+
+    "event_telemetry": {
+      "protocol": "CNPv1",
+      "message_type": "event",
+      "node_id": "cnp-office-temp-01",
+      "timestamp": "2026-03-18T10:05:00Z",
+      "payload": {
+        "event_id": "evt-000001",
+        "event_type": "temperature_reading",
+        "category": "telemetry",
+        "priority": "normal",
+        "data": { "temperature_c": 27.4, "humidity_pct": 61 }
+      }
+    },
+
+    "event_alert": {
+      "protocol": "CNPv1",
+      "message_type": "event",
+      "node_id": "cnp-entry-motion-01",
+      "timestamp": "2026-03-18T10:06:00Z",
+      "payload": {
+        "event_id": "evt-000002",
+        "event_type": "motion_detected",
+        "category": "alert",
+        "priority": "high",
+        "data": { "motion": true }
+      }
+    },
+
+    "command_relay": {
+      "protocol": "CNPv1",
+      "message_type": "command",
+      "node_id": "cnp-lab-relay-01",
+      "timestamp": "2026-03-18T10:07:00Z",
+      "payload": {
+        "command_id": "cmd-000001",
+        "command_type": "set_relay",
+        "category": "control",
+        "params": { "state": "on" },
+        "timeout_ms": 5000
+      }
+    }
+  }
+}

@@ -1,0 +1,5 @@
+system_id,system_label,test_name,path,concurrency,duration_s,requests_total,requests_ok,errors,error_kinds_json,error_rate,rps,latency_p50_ms,latency_p95_ms,latency_p99_ms,latency_mean_ms,latency_min_ms,latency_max_ms,proc_cpu_p95,proc_rss_p95_bytes
+files,c:\Projects\files,health,/health,25,10.0,112,62,50,"{""ReadTimeout"": 50}",0.44642857142857145,9.874332804777303,153.78039999995963,236.71452999983555,299.88991700015504,159.66008064512403,63.60599999970873,304.8372000002928,0.31000000000000444,52588544.0
+files,c:\Projects\files,nodes,/api/nodes,10,10.0,10,0,10,"{""ReadTimeout"": 10}",1.0,0.6342299967093853,nan,nan,nan,nan,nan,nan,0.0,52588544.0
+prod,c:\Projects\cnp_v1_starter_kit,health,/api/health,25,10.0,107,57,50,"{""ReadTimeout"": 50}",0.4672897196261682,9.29145605200767,160.26379999948404,402.115919999778,464.76036000036396,204.42207543859885,77.14049999958661,475.6195999998454,3.2450000000000023,54919168.0
+prod,c:\Projects\cnp_v1_starter_kit,nodes,/api/nodes,10,10.0,10,0,10,"{""ReadTimeout"": 10}",1.0,0.6453192519854187,nan,nan,nan,nan,nan,nan,0.0,54919168.0

@@ -18,7 +18,7 @@ import ipaddress
 import logging
 import time
 from collections import defaultdict, deque
-from typing import Callable
+from collections.abc import Callable
 
 from fastapi import Request, Response
 from fastapi.responses import JSONResponse
@@ -135,7 +135,10 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
                 "rate_limit.global_breach source_ip=%s path=%s count=%d",
                 ip, path, global_count,
             )
-            return _too_many("Global rate limit exceeded", _global_limiter.retry_after("__global__"))
+            return _too_many(
+                "Global rate limit exceeded",
+                _global_limiter.retry_after("__global__"),
+            )
 
         ip_ok, ip_count = _ip_limiter.is_allowed(ip)
         if not ip_ok:
@@ -143,7 +146,10 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
                 "rate_limit.ip_breach source_ip=%s path=%s count=%d",
                 ip, path, ip_count,
             )
-            return _too_many("Source IP rate limit exceeded", _ip_limiter.retry_after(ip))
+            return _too_many(
+                "Source IP rate limit exceeded",
+                _ip_limiter.retry_after(ip),
+            )
 
         if node_id:
             node_ok, node_count = _node_limiter.is_allowed(node_id)
@@ -152,7 +158,10 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
                     "rate_limit.node_breach node_id=%s source_ip=%s count=%d",
                     node_id, ip, node_count,
                 )
-                return _too_many("Node rate limit exceeded", _node_limiter.retry_after(node_id))
+                return _too_many(
+                    "Node rate limit exceeded",
+                    _node_limiter.retry_after(node_id),
+                )
 
         if path.endswith("/hello") or path.endswith("/node/hello"):
             boot_ok, boot_count = _bootstrap_limiter.is_allowed("bootstrap")

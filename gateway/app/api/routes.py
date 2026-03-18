@@ -1,22 +1,38 @@
 from __future__ import annotations
+
 import json
 import logging
 from datetime import datetime, timezone
-from typing import Any
+from typing import Annotated, Any
 from uuid import uuid4
 
-import aiosqlite
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
-from fastapi.responses import JSONResponse
-from pydantic import ValidationError
+from pydantic import BaseModel, Field, ValidationError
 
 from ..core.config import settings
+from ..core.db import db_connect
 from ..core.rate_limit import check_node_rate
-from ..core.storage import create_command, insert_ack, insert_error, insert_event, upsert_command_result
-from ..models.schemas import CommandRequest, Envelope, NodeResponse, _NODE_ID_PATTERN, validate_bootstrap_token
+from ..core.storage import (
+    create_command,
+    insert_error,
+    insert_event,
+    upsert_command_result,
+)
+from ..models.schemas import (
+    _NODE_ID_PATTERN,
+    CommandRequest,
+    Envelope,
+    NodeResponse,
+    validate_bootstrap_token,
+)
 
 router = APIRouter()
 log = logging.getLogger("cnp.routes")
+
+_VALID_NODE_STATUSES = frozenset(
+    {"online", "offline", "degraded", "unknown", "retired"}
+)
+_VALID_EVENT_PRIORITIES = frozenset({"low", "normal", "high", "critical"})
 
 
 def get_bridge():
@@ -37,7 +53,13 @@ def require_node_token(x_cnp_node_token: str | None = Header(default=None)) -> s
     return x_cnp_node_token  # type: ignore[return-value]
 
 
-def _raise_node_error(request: Request, status: int, code: str, message: str, node_id: str | None) -> None:
+def _raise_node_error(
+    request: Request,
+    status: int,
+    code: str,
+    message: str,
+    node_id: str | None,
+) -> None:
     raise HTTPException(
         status_code=status,
         detail={
@@ -52,7 +74,13 @@ def _raise_node_error(request: Request, status: int, code: str, message: str, no
     )
 
 
-def _raise_error(request: Request, status: int, code: str, message: str, details: dict | list | None = None) -> None:
+def _raise_error(
+    request: Request,
+    status: int,
+    code: str,
+    message: str,
+    details: dict | list | None = None,
+) -> None:
     raise HTTPException(
         status_code=status,
         detail={
@@ -65,6 +93,54 @@ def _raise_error(request: Request, status: int, code: str, message: str, details
             }
         },
     )
+
+
+def _build_nodes_filter(request: Request, status: str | None) -> tuple[str, list[Any]]:
+    if not status:
+        return "", []
+    if status not in _VALID_NODE_STATUSES:
+        valid = sorted(_VALID_NODE_STATUSES)
+        _raise_error(
+            request,
+            400,
+            "invalid_filter",
+            f"Invalid status filter. Valid: {', '.join(valid)}",
+            {
+                "field": "status",
+                "value": status,
+                "valid": valid,
+            },
+        )
+    return "WHERE status = ?", [status]
+
+
+def _build_events_filter(
+    request: Request,
+    priority: str | None,
+) -> tuple[str, list[Any]]:
+    if not priority:
+        return "", []
+    if priority not in _VALID_EVENT_PRIORITIES:
+        valid = sorted(_VALID_EVENT_PRIORITIES)
+        _raise_error(
+            request,
+            400,
+            "invalid_filter",
+            f"Invalid priority filter. Valid: {', '.join(valid)}",
+            {
+                "field": "priority",
+                "value": priority,
+                "valid": valid,
+            },
+        )
+    return "WHERE priority = ?", [priority]
+
+
+class NodeConfigUpdate(BaseModel):
+    heartbeat_interval_sec: int = Field(default=60, ge=10, le=3600)
+    report_interval_sec: int = Field(default=60, ge=10, le=3600)
+
+    model_config = {"extra": "forbid"}
 
 
 async def _parse_envelope(request: Request) -> tuple[Envelope, dict[str, Any]]:
@@ -81,9 +157,21 @@ async def _parse_envelope(request: Request) -> tuple[Envelope, dict[str, Any]]:
             if "node_id" in loc:
                 msg = e.get("msg", "")
                 if "field required" in msg.lower() or "required" in msg.lower():
-                    _raise_node_error(request, 400, "missing_node_id", "node_id is required", raw.get("node_id") if isinstance(raw, dict) else None)
+                    _raise_node_error(
+                        request,
+                        400,
+                        "missing_node_id",
+                        "node_id is required",
+                        raw.get("node_id") if isinstance(raw, dict) else None,
+                    )
                 else:
-                    _raise_node_error(request, 400, "invalid_node_id", "node_id must match ^[a-z0-9-]{3,64}$", raw.get("node_id") if isinstance(raw, dict) else None)
+                    _raise_node_error(
+                        request,
+                        400,
+                        "invalid_node_id",
+                        "node_id must match ^[a-z0-9-]{3,64}$",
+                        raw.get("node_id") if isinstance(raw, dict) else None,
+                    )
         _raise_error(
             request,
             400,
@@ -103,7 +191,7 @@ async def _parse_envelope(request: Request) -> tuple[Envelope, dict[str, Any]]:
 async def health() -> dict[str, Any]:
     db_ok = False
     try:
-        async with aiosqlite.connect(settings.gateway_db_path) as db:
+        async with db_connect(settings.gateway_db_path) as db:
             await db.execute("SELECT 1")
             db_ok = True
     except Exception:
@@ -118,15 +206,44 @@ async def health() -> dict[str, Any]:
 
 @router.get("/nodes")
 async def list_nodes(
+    request: Request,
     status: str | None = Query(default=None),
     limit: int = Query(default=100, le=500),
 ) -> list[dict[str, Any]]:
-    clause = "WHERE status = ?" if status else ""
-    params = [status, limit] if status else [limit]
-    async with aiosqlite.connect(settings.gateway_db_path) as db:
-        db.row_factory = aiosqlite.Row
+    clause, params = _build_nodes_filter(request, status)
+    params.append(limit)
+    async with db_connect(settings.gateway_db_path) as db:
         async with db.execute(
-            f"SELECT * FROM nodes {clause} ORDER BY node_id LIMIT ?",
+            f"""
+            SELECT
+              node_id,
+              device_uid,
+              node_name,
+              node_type,
+              protocol_version,
+              firmware_version,
+              hardware_model,
+              capabilities_json,
+              config_version,
+              status,
+              last_seen_utc,
+              first_seen_utc,
+              boot_reason,
+              heartbeat_interval_sec,
+              offline_after_sec,
+              last_rssi,
+              battery_pct,
+              free_heap_bytes,
+              queue_depth,
+              supports_ota,
+              ota_channel,
+              ota_last_result,
+              tags_json
+            FROM nodes
+            {clause}
+            ORDER BY node_id
+            LIMIT ?
+            """,
             params,
         ) as cur:
             rows = [dict(r) for r in await cur.fetchall()]
@@ -135,10 +252,37 @@ async def list_nodes(
 
 @router.get("/nodes/{node_id}")
 async def get_node(request: Request, node_id: str) -> dict[str, Any]:
-    async with aiosqlite.connect(settings.gateway_db_path) as db:
-        db.row_factory = aiosqlite.Row
+    async with db_connect(settings.gateway_db_path) as db:
         async with db.execute(
-            "SELECT * FROM nodes WHERE node_id=?", (node_id,)
+            """
+            SELECT
+              node_id,
+              device_uid,
+              node_name,
+              node_type,
+              protocol_version,
+              firmware_version,
+              hardware_model,
+              capabilities_json,
+              config_version,
+              status,
+              last_seen_utc,
+              first_seen_utc,
+              boot_reason,
+              heartbeat_interval_sec,
+              offline_after_sec,
+              last_rssi,
+              battery_pct,
+              free_heap_bytes,
+              queue_depth,
+              supports_ota,
+              ota_channel,
+              ota_last_result,
+              tags_json
+            FROM nodes
+            WHERE node_id=?
+            """,
+            (node_id,),
         ) as cur:
             row = await cur.fetchone()
     if not row:
@@ -151,10 +295,13 @@ async def send_command(
     request: Request,
     node_id: str,
     command: CommandRequest,
-    bridge=Depends(get_bridge),
+    bridge: Annotated[Any, Depends(get_bridge)],
 ) -> dict[str, Any]:
-    async with aiosqlite.connect(settings.gateway_db_path) as db:
-        async with db.execute("SELECT 1 FROM nodes WHERE node_id=?", (node_id,)) as cur:
+    async with db_connect(settings.gateway_db_path) as db:
+        async with db.execute(
+            "SELECT 1 FROM nodes WHERE node_id=?",
+            (node_id,),
+        ) as cur:
             exists = await cur.fetchone()
     if not exists:
         _raise_node_error(request, 404, "node_not_found", "node_id not found", node_id)
@@ -178,12 +325,40 @@ async def send_command(
 async def update_node_config(
     request: Request, node_id: str
 ) -> dict[str, Any]:
-    body = await request.json()
-    async with aiosqlite.connect(settings.gateway_db_path) as db:
-        async with db.execute("SELECT 1 FROM nodes WHERE node_id=?", (node_id,)) as cur:
+    try:
+        body = await request.json()
+    except Exception:
+        _raise_error(request, 400, "invalid_json", "Request body is not valid JSON")
+    try:
+        payload = NodeConfigUpdate.model_validate(body)
+    except ValidationError as exc:
+        _raise_error(
+            request,
+            400,
+            "invalid_config",
+            "Config payload validation failed",
+            {
+                "fields": [
+                    {"field": ".".join(str(p) for p in e["loc"]), "message": e["msg"]}
+                    for e in exc.errors()
+                ]
+            },
+        )
+
+    async with db_connect(settings.gateway_db_path) as db:
+        async with db.execute(
+            "SELECT 1 FROM nodes WHERE node_id=?",
+            (node_id,),
+        ) as cur:
             exists = await cur.fetchone()
         if not exists:
-            _raise_node_error(request, 404, "node_not_found", "node_id not found", node_id)
+            _raise_node_error(
+                request,
+                404,
+                "node_not_found",
+                "node_id not found",
+                node_id,
+            )
         await db.execute(
             """
             INSERT INTO node_config
@@ -196,8 +371,8 @@ async def update_node_config(
             """,
             (
                 node_id,
-                body.get("heartbeat_interval_sec", 60),
-                body.get("report_interval_sec", 60),
+                payload.heartbeat_interval_sec,
+                payload.report_interval_sec,
                 _now_utc(),
             ),
         )
@@ -207,15 +382,30 @@ async def update_node_config(
 
 @router.get("/events")
 async def list_events(
+    request: Request,
     limit: int = Query(default=50, le=500),
     priority: str | None = Query(default=None),
 ) -> list[dict[str, Any]]:
-    clause = "WHERE priority=?" if priority else ""
-    params = ([priority, limit] if priority else [limit])
-    async with aiosqlite.connect(settings.gateway_db_path) as db:
-        db.row_factory = aiosqlite.Row
+    clause, params = _build_events_filter(request, priority)
+    params.append(limit)
+    async with db_connect(settings.gateway_db_path) as db:
         async with db.execute(
-            f"SELECT * FROM events {clause} ORDER BY ts_utc DESC LIMIT ?",
+            f"""
+            SELECT
+              id,
+              message_id,
+              node_id,
+              ts_utc,
+              category,
+              event_type,
+              priority,
+              requires_ack,
+              body_json
+            FROM events
+            {clause}
+            ORDER BY ts_utc DESC
+            LIMIT ?
+            """,
             params,
         ) as cur:
             return [dict(r) for r in await cur.fetchall()]
@@ -223,25 +413,33 @@ async def list_events(
 
 @router.get("/alerts")
 async def list_alerts() -> list[dict[str, Any]]:
-    async with aiosqlite.connect(settings.gateway_db_path) as db:
-        db.row_factory = aiosqlite.Row
+    async with db_connect(settings.gateway_db_path) as db:
         async with db.execute(
-            "SELECT * FROM events WHERE priority IN ('high','critical') "
-            "AND ts_utc >= datetime('now', '-24 hours') "
-            "ORDER BY ts_utc DESC LIMIT 100"
+            """
+            SELECT * FROM events
+            WHERE priority IN ('high','critical')
+              AND ts_utc >= datetime('now', '-24 hours')
+            ORDER BY ts_utc DESC
+            LIMIT 100
+            """
         ) as cur:
             return [dict(r) for r in await cur.fetchall()]
 
 
 @router.get("/summary")
 async def fleet_summary() -> dict[str, Any]:
-    async with aiosqlite.connect(settings.gateway_db_path) as db:
-        db.row_factory = aiosqlite.Row
-        async with db.execute("SELECT COUNT(*) FROM nodes WHERE status != 'retired'") as cur:
+    async with db_connect(settings.gateway_db_path) as db:
+        async with db.execute(
+            "SELECT COUNT(*) FROM nodes WHERE status != 'retired'"
+        ) as cur:
             (total_nodes,) = await cur.fetchone()
-        async with db.execute("SELECT COUNT(*) FROM nodes WHERE status = 'online'") as cur:
+        async with db.execute(
+            "SELECT COUNT(*) FROM nodes WHERE status = 'online'"
+        ) as cur:
             (online_count,) = await cur.fetchone()
-        async with db.execute("SELECT COUNT(*) FROM nodes WHERE status = 'offline'") as cur:
+        async with db.execute(
+            "SELECT COUNT(*) FROM nodes WHERE status = 'offline'"
+        ) as cur:
             (offline_count,) = await cur.fetchone()
         async with db.execute(
             "SELECT COUNT(*) FROM events WHERE priority IN ('high','critical') "
@@ -273,7 +471,14 @@ async def node_hello(
 ) -> dict[str, Any]:
     envelope, raw = await _parse_envelope(request)
     node_id = envelope.node_id
-    if not _NODE_ID_PATTERN.match(node_id): _raise_node_error(request, 400, "invalid_node_id", "node_id must match ^[a-z0-9-]{3,64}$", node_id)
+    if not _NODE_ID_PATTERN.match(node_id):
+        _raise_node_error(
+            request,
+            400,
+            "invalid_node_id",
+            "node_id must match ^[a-z0-9-]{3,64}$",
+            node_id,
+        )
     allowed, retry = check_node_rate(node_id)
     if not allowed:
         raise HTTPException(
@@ -283,8 +488,7 @@ async def node_hello(
         )
     from ..core.registry import upsert_node
     await upsert_node(settings.gateway_db_path, envelope.model_dump())
-    async with aiosqlite.connect(settings.gateway_db_path) as db:
-        db.row_factory = aiosqlite.Row
+    async with db_connect(settings.gateway_db_path) as db:
         async with db.execute(
             "SELECT * FROM node_config WHERE node_id=?", (node_id,)
         ) as cur:
@@ -338,7 +542,7 @@ async def node_state(
     _token: str = Depends(require_node_token),
 ) -> dict[str, Any]:
     envelope, _ = await _parse_envelope(request)
-    async with aiosqlite.connect(settings.gateway_db_path) as db:
+    async with db_connect(settings.gateway_db_path) as db:
         p = envelope.payload
         await db.execute(
             "UPDATE nodes SET status=?, last_seen_utc=? WHERE node_id=?",
@@ -373,8 +577,7 @@ async def get_pending_command(
     node_id: str,
     _token: str = Depends(require_node_token),
 ) -> dict[str, Any]:
-    async with aiosqlite.connect(settings.gateway_db_path) as db:
-        db.row_factory = aiosqlite.Row
+    async with db_connect(settings.gateway_db_path) as db:
         async with db.execute(
             """SELECT * FROM commands
                WHERE node_id=? AND status='queued'

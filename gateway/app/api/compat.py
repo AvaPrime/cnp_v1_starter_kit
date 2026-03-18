@@ -1,19 +1,20 @@
 from __future__ import annotations
+
 import json
 import logging
 import uuid
 from datetime import datetime, timezone
 from typing import Any
 
-import aiosqlite
 from fastapi import APIRouter, Depends, HTTPException, Request
 
 from ..core.config import settings
+from ..core.db import db_connect
 from ..core.rate_limit import check_node_rate
-from ..core.registry import upsert_node, update_heartbeat
+from ..core.registry import update_heartbeat, upsert_node
 from ..core.storage import insert_error, insert_event, upsert_command_result
-from .routes import require_node_token
 from ..models.schemas import _NODE_ID_PATTERN
+from .routes import require_node_token
 
 log = logging.getLogger("cnp.compat")
 router = APIRouter()
@@ -23,13 +24,19 @@ def _translate_envelope(raw: dict[str, Any]) -> dict[str, Any]:
     node_id = raw.get("node_id", "unknown")
     if "protocol" in raw and "protocol_version" not in raw:
         log.warning(
-            "DEPRECATION_V1_KEY original_key=protocol canonical_key=protocol_version node_id=%s",
+            (
+                "DEPRECATION_V1_KEY original_key=protocol "
+                "canonical_key=protocol_version node_id=%s"
+            ),
             node_id,
         )
         raw["protocol_version"] = raw.pop("protocol")
     if "timestamp" in raw and "ts_utc" not in raw:
         log.warning(
-            "DEPRECATION_V1_KEY original_key=timestamp canonical_key=ts_utc node_id=%s",
+            (
+                "DEPRECATION_V1_KEY original_key=timestamp "
+                "canonical_key=ts_utc node_id=%s"
+            ),
             node_id,
         )
         ts = raw.pop("timestamp")
@@ -43,19 +50,28 @@ def _translate_envelope(raw: dict[str, Any]) -> dict[str, Any]:
     payload = raw.get("payload", {})
     if "event_id" in payload:
         log.warning(
-            "DEPRECATION_V1_KEY original_key=payload.event_id canonical_key=message_id node_id=%s",
+            (
+                "DEPRECATION_V1_KEY original_key=payload.event_id "
+                "canonical_key=message_id node_id=%s"
+            ),
             node_id,
         )
         raw["message_id"] = payload.pop("event_id")
     if "params" in payload and "arguments" not in payload:
         log.warning(
-            "DEPRECATION_V1_KEY original_key=payload.params canonical_key=payload.arguments node_id=%s",
+            (
+                "DEPRECATION_V1_KEY original_key=payload.params "
+                "canonical_key=payload.arguments node_id=%s"
+            ),
             node_id,
         )
         payload["arguments"] = payload.pop("params")
     if "error_code" in payload:
         log.warning(
-            "DEPRECATION_V1_KEY original_key=payload.error_code canonical_key=payload.code node_id=%s",
+            (
+                "DEPRECATION_V1_KEY original_key=payload.error_code "
+                "canonical_key=payload.code node_id=%s"
+            ),
             node_id,
         )
         payload["code"] = payload.pop("error_code")
@@ -72,7 +88,10 @@ def _translate_envelope(raw: dict[str, Any]) -> dict[str, Any]:
     caps = payload.get("capabilities", {})
     if "power_mode" in caps:
         log.warning(
-            "DEPRECATION_V1_KEY original_key=capabilities.power_mode canonical_key=capabilities.power.source node_id=%s",
+            (
+                "DEPRECATION_V1_KEY original_key=capabilities.power_mode "
+                "canonical_key=capabilities.power.source node_id=%s"
+            ),
             node_id,
         )
         power_mode = caps.pop("power_mode")
@@ -91,7 +110,13 @@ def _now() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
-def _raise_node_error(request: Request, status: int, code: str, message: str, node_id: str | None) -> None:
+def _raise_node_error(
+    request: Request,
+    status: int,
+    code: str,
+    message: str,
+    node_id: str | None,
+) -> None:
     raise HTTPException(
         status_code=status,
         detail={
@@ -115,9 +140,21 @@ async def compat_hello(
     raw = _translate_envelope(raw)
     node_id = raw.get("node_id", "")
     if not node_id:
-        _raise_node_error(request, 400, "missing_node_id", "node_id is required", None)
+        _raise_node_error(
+            request,
+            400,
+            "missing_node_id",
+            "node_id is required",
+            None,
+        )
     if not _NODE_ID_PATTERN.match(node_id):
-        _raise_node_error(request, 400, "invalid_node_id", "node_id must match ^[a-z0-9-]{3,64}$", node_id)
+        _raise_node_error(
+            request,
+            400,
+            "invalid_node_id",
+            "node_id must match ^[a-z0-9-]{3,64}$",
+            node_id,
+        )
     allowed, retry = check_node_rate(node_id)
     if not allowed:
         raise HTTPException(
@@ -126,12 +163,11 @@ async def compat_hello(
             detail="Rate limit exceeded",
         )
     await upsert_node(settings.gateway_db_path, raw)
-    async with aiosqlite.connect(settings.gateway_db_path) as db:
+    async with db_connect(settings.gateway_db_path) as db:
         await db.execute(
             "INSERT OR IGNORE INTO node_config (node_id) VALUES (?)", (node_id,)
         )
         await db.commit()
-        db.row_factory = aiosqlite.Row
         async with db.execute(
             "SELECT * FROM node_config WHERE node_id=?", (node_id,)
         ) as cur:
@@ -198,8 +234,7 @@ async def compat_get_commands(
     node_id: str,
     _token: str = Depends(require_node_token),
 ) -> dict[str, Any]:
-    async with aiosqlite.connect(settings.gateway_db_path) as db:
-        db.row_factory = aiosqlite.Row
+    async with db_connect(settings.gateway_db_path) as db:
         async with db.execute(
             """SELECT * FROM commands
                WHERE node_id=? AND status='queued'

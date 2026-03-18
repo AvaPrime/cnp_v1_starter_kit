@@ -11,7 +11,7 @@ Audit additions:
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 
 @dataclass(frozen=True)
@@ -45,7 +45,11 @@ class Settings:
     def trusted_proxies(self) -> frozenset[str]:
         if not self.trusted_proxies_raw:
             return frozenset()
-        return frozenset(p.strip() for p in self.trusted_proxies_raw.split(",") if p.strip())
+        return frozenset(
+            p.strip()
+            for p in self.trusted_proxies_raw.split(",")
+            if p.strip()
+        )
 
 
 settings = Settings()

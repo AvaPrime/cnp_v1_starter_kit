@@ -65,11 +65,11 @@ jobs:
         # -ll = only report MEDIUM and above severity
 
       - name: pip-audit
-        run: pip-audit -r gateway/requirements.txt --ignore-vuln GHSA-placeholder
+        run: pip-audit -r gateway/requirements.txt
 
   # ── 4. Test + Coverage ────────────────────────────────────────────────────
   test:
-    name: Test (pytest + coverage)
+    name: Test + Coverage (pytest-cov >= 60%)
     runs-on: ubuntu-latest
     env:
       BOOTSTRAP_TOKEN: ci-bootstrap-token-not-real
@@ -87,16 +87,21 @@ jobs:
       - name: Install deps
         run: pip install -r gateway/requirements.txt
 
-      - name: Run tests
+      - name: pytest with coverage gate
         working-directory: gateway
-        run: pytest
-        # pytest.ini configures: --cov=app --cov-fail-under=60 --tb=short
+        run: |
+          pytest \
+            --cov=app \
+            --cov-report=term-missing \
+            --cov-report=xml:coverage.xml \
+            --cov-fail-under=60 \
+            -v --tb=short
 
       - name: Upload coverage report
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: coverage-report
+          name: coverage-xml
           path: gateway/coverage.xml
 
   # ── 5. Docker build check ─────────────────────────────────────────────────
@@ -150,3 +155,6 @@ jobs:
         run: |
           test -f LICENSE || (echo "ERROR: LICENSE file missing" && exit 1)
           echo "OK: LICENSE present"
+
+      - name: SECURITY.md present
+        run: test -f SECURITY.md || echo "WARNING: SECURITY.md missing (required for Phase 2)"

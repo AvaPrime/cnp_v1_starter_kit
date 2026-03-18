@@ -1,9 +1,8 @@
 from __future__ import annotations
-import json
+
 import logging
 import os
 import re
-from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Literal
 
@@ -15,7 +14,8 @@ log = logging.getLogger("cnp.models")
 BOOTSTRAP_TOKEN: str = os.environ.get("BOOTSTRAP_TOKEN", "")
 if not BOOTSTRAP_TOKEN:
     log.warning(
-        "BOOTSTRAP_TOKEN env var not set — auth middleware will reject all node requests."
+        "BOOTSTRAP_TOKEN env var not set — "
+        "auth middleware will reject all node requests."
     )
 
 
@@ -48,7 +48,7 @@ class NodeResponse(BaseModel):
     model_config = {"from_attributes": True}
 
     @classmethod
-    def from_row(cls, row: dict[str, Any]) -> "NodeResponse":
+    def from_row(cls, row: dict[str, Any]) -> NodeResponse:
         allowed = cls.model_fields.keys()
         return cls(**{k: row[k] for k in allowed if k in row})
 
@@ -87,17 +87,27 @@ class Envelope(BaseModel):
             return data
         if "protocol" in data and "protocol_version" not in data:
             log.warning(
-                "DEPRECATION_V1_KEY original_key=protocol canonical_key=protocol_version node_id=%s",
+                (
+                    "DEPRECATION_V1_KEY original_key=protocol "
+                    "canonical_key=protocol_version node_id=%s"
+                ),
                 data.get("node_id", "unknown"),
             )
             data["protocol_version"] = data.pop("protocol")
         if "timestamp" in data and "ts_utc" not in data:
             log.warning(
-                "DEPRECATION_V1_KEY original_key=timestamp canonical_key=ts_utc node_id=%s",
+                (
+                    "DEPRECATION_V1_KEY original_key=timestamp "
+                    "canonical_key=ts_utc node_id=%s"
+                ),
                 data.get("node_id", "unknown"),
             )
             data["ts_utc"] = data.pop("timestamp")
-        if "ts_utc" in data and isinstance(data["ts_utc"], str) and data["ts_utc"].endswith("+00:00"):
+        if (
+            "ts_utc" in data
+            and isinstance(data["ts_utc"], str)
+            and data["ts_utc"].endswith("+00:00")
+        ):
             data["ts_utc"] = data["ts_utc"].replace("+00:00", "Z")
         if "message_id" not in data or not data.get("message_id"):
             import uuid

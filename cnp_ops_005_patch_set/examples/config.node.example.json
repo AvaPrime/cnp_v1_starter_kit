@@ -1,0 +1,17 @@
+{
+  "wifiSsid": "YourWiFi",
+  "wifiPassword": "YourPassword",
+  "mqttHost": "192.168.1.100",
+  "mqttPort": 1883,
+  "mqttUser": "",
+  "mqttPassword": "",
+  "otaUrl": "https://example.com/firmware/latest.bin",
+  "nodeName": "Office Climate 01",
+  "nodeType": "sensor",
+  "hardwareModel": "esp32-c3-supermini",
+  "heartbeatIntervalSec": 60,
+  "telemetryIntervalSec": 60,
+  "offlineAfterSec": 180,
+  "reportRssi": true,
+  "supportsOta": true
+}

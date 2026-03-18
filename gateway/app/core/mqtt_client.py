@@ -1,17 +1,20 @@
 from __future__ import annotations
+
 import asyncio
 import json
 import logging
 import time
 from collections import defaultdict, deque
+from collections.abc import Callable
+from contextlib import AbstractAsyncContextManager
 from datetime import datetime, timezone
-from typing import Any, AsyncContextManager, Callable
+from typing import Any
 
-import aiosqlite
 from asyncio_mqtt import Client, MqttError
 
 from .config import settings
-from .registry import upsert_node, update_heartbeat
+from .db import db_connect
+from .registry import update_heartbeat, upsert_node
 from .storage import (
     insert_ack,
     insert_error,
@@ -61,7 +64,7 @@ class _ClientRateState:
         return len(self.invalid_timestamps)
 
 
-ClientFactory = Callable[[], AsyncContextManager]
+ClientFactory = Callable[[], AbstractAsyncContextManager[Client]]
 
 
 class GatewayMqttBridge:
@@ -80,7 +83,7 @@ class GatewayMqttBridge:
     def set_ops_detector(self, detector: Any) -> None:
         self._ops_detector = detector
 
-    def _default_factory(self) -> AsyncContextManager:
+    def _default_factory(self) -> AbstractAsyncContextManager[Client]:
         return Client(
             hostname=settings.mqtt_broker_host,
             port=settings.mqtt_broker_port,
@@ -275,7 +278,7 @@ class GatewayMqttBridge:
     async def _handle_state(self, envelope: dict[str, Any]) -> None:
         node_id = envelope.get("node_id")
         if node_id:
-            async with aiosqlite.connect(self.db_path) as db:
+            async with db_connect(self.db_path) as db:
                 await db.execute(
                     "UPDATE nodes SET last_seen_utc=?, status=? WHERE node_id=?",
                     (

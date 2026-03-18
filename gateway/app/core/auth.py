@@ -1,17 +1,19 @@
 from __future__ import annotations
+
 import hashlib
 import hmac
 import logging
 import os
 import secrets
-from typing import Any
 
-import aiosqlite
+from .db import db_connect
 
 log = logging.getLogger("cnp.auth")
 
 _BOOTSTRAP_TOKEN: str = os.environ.get("BOOTSTRAP_TOKEN", "")
-_BOOTSTRAP_DISABLED: bool = os.environ.get("BOOTSTRAP_DISABLED", "false").lower() == "true"
+_BOOTSTRAP_DISABLED: bool = (
+    os.environ.get("BOOTSTRAP_DISABLED", "false").lower() == "true"
+)
 
 
 def generate_node_secret() -> str:
@@ -50,7 +52,10 @@ async def validate_node_token(
 
     if _BOOTSTRAP_DISABLED:
         log.warning(
-            "auth.bootstrap_disabled node_id=%s — rejecting (no per-node secret provisioned)",
+            (
+                "auth.bootstrap_disabled node_id=%s — rejecting "
+                "(no per-node secret provisioned)"
+            ),
             node_id,
         )
         return False
@@ -63,7 +68,7 @@ async def validate_node_token(
 
 async def _get_node_secret_hash(db_path: str, node_id: str) -> str | None:
     try:
-        async with aiosqlite.connect(db_path) as db:
+        async with db_connect(db_path) as db:
             async with db.execute(
                 "SELECT node_secret_hash FROM nodes WHERE node_id=?", (node_id,)
             ) as cur:
@@ -79,7 +84,7 @@ async def provision_node_secret(
     plain_secret = generate_node_secret()
     secret_hash = hash_secret(plain_secret)
 
-    async with aiosqlite.connect(db_path) as db:
+    async with db_connect(db_path) as db:
         await db.execute(
             "UPDATE nodes SET node_secret_hash=? WHERE node_id=?",
             (secret_hash, node_id),
@@ -98,7 +103,7 @@ async def rotate_node_secret(
     plain_secret = generate_node_secret()
     secret_hash = hash_secret(plain_secret)
 
-    async with aiosqlite.connect(db_path) as db:
+    async with db_connect(db_path) as db:
         async with db.execute(
             "SELECT 1 FROM nodes WHERE node_id=?", (node_id,)
         ) as cur:

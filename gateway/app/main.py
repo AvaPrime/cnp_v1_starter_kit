@@ -1,28 +1,33 @@
 from __future__ import annotations
+
 import asyncio
 from contextlib import asynccontextmanager
-
-from fastapi import FastAPI, Request
-from fastapi.exceptions import HTTPException as StarletteHTTPException, RequestValidationError
-from fastapi.responses import JSONResponse
-from fastapi.openapi.utils import get_openapi
 from datetime import datetime, timezone
 
-from .api.routes import router
-from .api.compat import router as compat_router
+from fastapi import FastAPI, Request
+from fastapi.exceptions import HTTPException as StarletteHTTPException
+from fastapi.exceptions import RequestValidationError
+from fastapi.openapi.utils import get_openapi
+from fastapi.responses import JSONResponse
+
 from .api.admin import router as admin_router
+from .api.compat import router as compat_router
+from .api.routes import router
 from .core.config import settings
 from .core.db import init_db
 from .core.mqtt_client import GatewayMqttBridge
-from .core.registry import mark_offline_nodes
 from .core.rate_limit import RateLimitMiddleware
+from .core.registry import mark_offline_nodes
 
 bridge = GatewayMqttBridge(settings.gateway_db_path)
 
 
 async def offline_watcher() -> None:
     while True:
-        await mark_offline_nodes(settings.gateway_db_path, settings.offline_after_seconds)
+        await mark_offline_nodes(
+            settings.gateway_db_path,
+            settings.offline_after_seconds,
+        )
         await asyncio.sleep(15)
 
 
@@ -69,12 +74,21 @@ async def http_exception_handler(request: Request, exc: StarletteHTTPException):
 
 
 @app.exception_handler(RequestValidationError)
-async def request_validation_exception_handler(request: Request, exc: RequestValidationError):
+async def request_validation_exception_handler(
+    request: Request,
+    exc: RequestValidationError,
+) -> JSONResponse:
     def now() -> str:
         return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
     fields = []
     for e in exc.errors():
-        fields.append({"field": ".".join(str(p) for p in e.get("loc", [])), "message": e.get("msg", "")})
+        fields.append(
+            {
+                "field": ".".join(str(p) for p in e.get("loc", [])),
+                "message": e.get("msg", ""),
+            }
+        )
     payload = {
         "error": {
             "code": "request_validation_failed",
@@ -119,13 +133,23 @@ def custom_openapi():
     error_schema_ref = {"$ref": "#/components/schemas/ErrorResponse"}
     for path, path_item in openapi_schema.get("paths", {}).items():
         for method, operation in path_item.items():
-            if method.lower() not in {"get", "post", "put", "patch", "delete", "options", "head"}:
+            if method.lower() not in {
+                "get",
+                "post",
+                "put",
+                "patch",
+                "delete",
+                "options",
+                "head",
+            }:
                 continue
             responses = operation.setdefault("responses", {})
             responses["400"] = {
                 "description": (
-                    "Bad Request. The request is invalid (missing fields, invalid types, out-of-range values, "
-                    "invalid JSON, or invalid envelope). Clients should inspect error.code and error.details."
+                    "Bad Request. The request is invalid (missing fields, "
+                    "invalid types, out-of-range values, "
+                    "invalid JSON, or invalid envelope). "
+                    "Clients should inspect error.code and error.details."
                 ),
                 "content": {
                     "application/json": {
@@ -168,8 +192,10 @@ def custom_openapi():
             }
             responses["404"] = {
                 "description": (
-                    "Not Found. The requested resource does not exist (for example, a node_id was not found). "
-                    "Clients should handle this as a missing resource and may retry only if appropriate."
+                    "Not Found. The requested resource does not exist "
+                    "(for example, a node_id was not found). "
+                    "Clients should handle this as a missing resource "
+                    "and may retry only if appropriate."
                 ),
                 "content": {
                     "application/json": {

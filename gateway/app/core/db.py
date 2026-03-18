@@ -12,8 +12,8 @@ Changes from audit (P0-03 / P0-04):
 from __future__ import annotations
 
 import logging
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
-from typing import AsyncGenerator
 
 import aiosqlite
 

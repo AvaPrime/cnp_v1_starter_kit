@@ -15,7 +15,6 @@ import os
 from datetime import datetime, timezone
 from typing import Any
 
-import aiosqlite
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from pydantic import BaseModel
 
@@ -182,7 +181,10 @@ async def provision_secret(
     )
 
 
-@router.post("/nodes/{node_id}/rotate-secret", dependencies=[Depends(require_admin_token)])
+@router.post(
+    "/nodes/{node_id}/rotate-secret",
+    dependencies=[Depends(require_admin_token)],
+)
 async def rotate_secret(
     request: Request,
     node_id: str,

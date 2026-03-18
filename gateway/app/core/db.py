@@ -29,6 +29,15 @@ CREATE TABLE IF NOT EXISTS nodes (
   metadata_json TEXT DEFAULT '{}'
 );
 
+CREATE TABLE IF NOT EXISTS node_config (
+  node_id TEXT PRIMARY KEY REFERENCES nodes(node_id),
+  heartbeat_interval_sec INTEGER NOT NULL DEFAULT 60,
+  report_interval_sec INTEGER NOT NULL DEFAULT 60,
+  permissions_json TEXT,
+  custom_json TEXT,
+  updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
+);
+
 CREATE TABLE IF NOT EXISTS events (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   message_id TEXT NOT NULL UNIQUE,

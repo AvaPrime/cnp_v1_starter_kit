@@ -1,0 +1,219 @@
+# CNP-OPS-004 — Anomaly Rule Catalog v1
+# Each rule is evaluated by the detector against rolling
+# heartbeat windows and fleet state.
+#
+# suppress_for_sec: cooldown after a rule fires before it
+#   can fire again for the same scope.
+# consecutive_hits: how many successive signals must match
+#   before the anomaly is raised.
+# requires_human_above_level: safety level above which
+#   the reflex engine requires operator approval.
+
+rules:
+
+  - rule_id: A-001
+    name: Queue Congestion
+    scope: node
+    anomaly_type: queue_congestion
+    category: performance
+    severity: warning
+    when:
+      metric: queue_depth
+      operator: ">"
+      value: 10
+      consecutive_hits: 3
+    suppress_for_sec: 300
+    confidence: 0.9
+    default_reflex:
+      action_type: publish_config_update
+      payload:
+        telemetry_interval_sec_multiplier: 2.0
+        heartbeat_interval_sec_multiplier: 1.5
+      safety_level: 2
+    requires_human_above_level: 3
+    enabled: true
+
+  - rule_id: A-002
+    name: Memory Leak Suspected
+    scope: node
+    anomaly_type: memory_leak
+    category: reliability
+    severity: warning
+    when:
+      metric: free_heap_bytes
+      operator: declining_trend
+      window: 3
+    suppress_for_sec: 600
+    confidence: 0.75
+    default_reflex:
+      action_type: observe_only
+      payload: {}
+      safety_level: 0
+    requires_human_above_level: 3
+    enabled: true
+
+  - rule_id: A-003
+    name: Weak Connectivity
+    scope: node
+    anomaly_type: weak_connectivity
+    category: connectivity
+    severity: warning
+    when:
+      metric: wifi_rssi
+      operator: "<"
+      value: -80
+      consecutive_hits: 3
+    suppress_for_sec: 300
+    confidence: 0.85
+    default_reflex:
+      action_type: publish_config_update
+      payload:
+        heartbeat_interval_sec_multiplier: 1.5
+        telemetry_interval_sec_multiplier: 2.0
+      safety_level: 2
+    requires_human_above_level: 3
+    enabled: true
+
+  - rule_id: A-004
+    name: Command Lag
+    scope: node
+    anomaly_type: command_lag
+    category: performance
+    severity: warning
+    when:
+      metric: command_p95_lag_ms
+      operator: ">"
+      value: 5000
+      consecutive_hits: 1
+    suppress_for_sec: 120
+    confidence: 0.8
+    default_reflex:
+      action_type: observe_only
+      payload: {}
+      safety_level: 0
+    requires_human_above_level: 3
+    enabled: true
+
+  - rule_id: A-005
+    name: Offline Flapping
+    scope: node
+    anomaly_type: offline_flapping
+    category: reliability
+    severity: error
+    when:
+      metric: offline_transitions
+      operator: ">"
+      value: 3
+      within_window_sec: 600
+    suppress_for_sec: 600
+    confidence: 0.9
+    default_reflex:
+      action_type: set_node_degraded
+      payload: {}
+      safety_level: 2
+    requires_human_above_level: 3
+    enabled: true
+
+  - rule_id: A-006
+    name: Auth Failure Burst
+    scope: node
+    anomaly_type: auth_failure_burst
+    category: security
+    severity: critical
+    when:
+      metric: auth_failure_rate
+      operator: ">"
+      value: 5
+      within_window_sec: 60
+    suppress_for_sec: 900
+    confidence: 0.95
+    default_reflex:
+      action_type: quarantine_node
+      payload: {}
+      safety_level: 3
+    requires_human_above_level: 3
+    enabled: true
+
+  - rule_id: A-007
+    name: Invalid Message Storm
+    scope: node
+    anomaly_type: invalid_message_storm
+    category: security
+    severity: critical
+    when:
+      metric: invalid_message_rate
+      operator: ">"
+      value: 3
+      within_window_sec: 60
+    suppress_for_sec: 900
+    confidence: 0.95
+    default_reflex:
+      action_type: quarantine_node
+      payload: {}
+      safety_level: 3
+    requires_human_above_level: 3
+    enabled: true
+
+  - rule_id: A-008
+    name: Dead-Letter Growth
+    scope: node
+    anomaly_type: dead_letter_growth
+    category: reliability
+    severity: warning
+    when:
+      metric: dead_letter_count
+      operator: ">"
+      value: 4
+      consecutive_hits: 2
+    suppress_for_sec: 300
+    confidence: 0.8
+    default_reflex:
+      action_type: observe_only
+      payload: {}
+      safety_level: 0
+    requires_human_above_level: 3
+    enabled: false   # requires P3-06 (dead_letter_count in heartbeat)
+
+  - rule_id: A-009
+    name: Duplicate Message Spike
+    scope: node
+    anomaly_type: duplicate_message_spike
+    category: reliability
+    severity: warning
+    when:
+      metric: duplicate_rate_per_min
+      operator: ">"
+      value: 5
+      consecutive_hits: 1
+    suppress_for_sec: 300
+    confidence: 0.75
+    default_reflex:
+      action_type: observe_only
+      payload: {}
+      safety_level: 0
+    requires_human_above_level: 3
+    enabled: false   # requires P3-04 dedup instrumentation
+
+  - rule_id: A-010
+    name: Fleet Hotspot
+    scope: zone
+    anomaly_type: fleet_hotspot
+    category: fleet
+    severity: error
+    when:
+      condition: concurrent_zone_anomalies
+      anomaly_types:
+        - queue_congestion
+        - weak_connectivity
+        - offline_flapping
+      min_node_count: 3
+      within_window_sec: 300
+      zone_coverage_pct: 0.5
+    suppress_for_sec: 600
+    confidence: 0.85
+    default_reflex:
+      action_type: pause_zone_automation
+      payload: {}
+      safety_level: 2
+    requires_human_above_level: 3
+    enabled: true

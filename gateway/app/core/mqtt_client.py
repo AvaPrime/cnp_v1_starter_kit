@@ -7,6 +7,7 @@ from collections import defaultdict, deque
 from datetime import datetime, timezone
 from typing import Any, AsyncContextManager, Callable
 
+import aiosqlite
 from asyncio_mqtt import Client, MqttError
 
 from .config import settings
@@ -274,7 +275,6 @@ class GatewayMqttBridge:
     async def _handle_state(self, envelope: dict[str, Any]) -> None:
         node_id = envelope.get("node_id")
         if node_id:
-            import aiosqlite
             async with aiosqlite.connect(self.db_path) as db:
                 await db.execute(
                     "UPDATE nodes SET last_seen_utc=?, status=? WHERE node_id=?",

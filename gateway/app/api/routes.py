@@ -13,7 +13,7 @@ from pydantic import ValidationError
 from ..core.config import settings
 from ..core.rate_limit import check_node_rate
 from ..core.storage import create_command, insert_ack, insert_error, insert_event, upsert_command_result
-from ..models.schemas import CommandRequest, Envelope, NodeResponse, validate_bootstrap_token
+from ..models.schemas import CommandRequest, Envelope, NodeResponse, _NODE_ID_PATTERN, validate_bootstrap_token
 
 router = APIRouter()
 log = logging.getLogger("cnp.routes")
@@ -223,6 +223,7 @@ async def node_hello(
 ) -> dict[str, Any]:
     envelope, raw = await _parse_envelope(request)
     node_id = envelope.node_id
+    if not _NODE_ID_PATTERN.match(node_id): raise HTTPException(status_code=400, detail='Invalid node_id format')
     allowed, retry = check_node_rate(node_id)
     if not allowed:
         raise HTTPException(

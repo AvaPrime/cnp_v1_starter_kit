@@ -123,6 +123,13 @@ async def app_client(db_path: str, mock_bridge: MockMqttBridge) -> AsyncGenerato
     original_settings = cfg_module.settings
     cfg_module.settings = replace(original_settings, gateway_db_path=db_path)
     main_module.settings = cfg_module.settings
+    import app.api.routes as routes_module
+    import app.api.compat as compat_module
+    import app.api.admin as admin_module
+    routes_module.settings = cfg_module.settings
+    compat_module.settings = cfg_module.settings
+    admin_module.settings = cfg_module.settings
+    await init_db(db_path)
 
     async with AsyncClient(
         transport=ASGITransport(app=app),

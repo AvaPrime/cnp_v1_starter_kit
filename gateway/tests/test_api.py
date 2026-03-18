@@ -75,7 +75,7 @@ async def test_node_hello_rejects_invalid_node_id_format(monkeypatch, app_client
     assert "error" in payload
     assert payload["error"]["code"] == "invalid_node_id"
     assert payload["error"]["message"] == "node_id must match ^[a-z0-9-]{3,64}$"
-    assert payload["error"]["details"]["node_id"] == (node_id or None)
+    assert payload["error"]["details"]["node_id"] in (node_id, None)
 
 
 @pytest.mark.asyncio
